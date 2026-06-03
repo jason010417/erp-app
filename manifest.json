@@ -1,0 +1,14 @@
+# 避免上傳敏感資料或不必要的系統檔案
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# 若未來有包含真實資料的備份檔，請放這裡
+# data.backup.js
+# suppliers.real.js
