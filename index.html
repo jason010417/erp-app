@@ -167,6 +167,12 @@
         <div class="page-title"><i class="ti ti-history"></i> 操作記錄</div>
         <button class="small-btn" onclick="exportCSV()"><i class="ti ti-download"></i> 匯出</button>
       </div>
+      <div class="est-filter-row" style="margin-bottom:10px;">
+        <button class="ftab active" id="hf-all"      onclick="setHistoryFilter('all')">全部</button>
+        <button class="ftab"        id="hf-purchase" onclick="setHistoryFilter('purchase')">進貨</button>
+        <button class="ftab"        id="hf-sale"     onclick="setHistoryFilter('sale')">出貨/銷售</button>
+        <button class="ftab"        id="hf-prod"     onclick="setHistoryFilter('prod')">生產</button>
+      </div>
       <div class="log-list" id="log-list"></div>
     </div>
 
@@ -880,44 +886,86 @@
       <div id="cust-estimate-history"><div class="order-empty" style="padding:20px;text-align:center;color:var(--text3);">尚無估價記錄</div></div>
     </div>
 
-    <!-- ========== PAGE: 銷貨明細（架構預留） ========== -->
+    <!-- ========== PAGE: 銷貨明細 ========== -->
     <div class="page" id="page-sale-report">
       <div class="op-header">
-        <button class="back-btn" onclick="showPage('home')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-chart-bar" style="color:#185FA5;"></i> 銷貨明細</div>
+        <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-chart-bar" style="color:#BA7517;"></i> 銷貨明細</div>
+        <button class="small-btn" onclick="exportReport('sale')"><i class="ti ti-download"></i> 匯出</button>
       </div>
-      <div class="coming-soon-card">
-        <div class="cs-icon">📊</div>
-        <div class="cs-title">銷貨明細查詢</div>
-        <div class="cs-desc">查詢所有銷售記錄<br>支援多條件篩選</div>
-        <div class="cs-features">
-          <div class="cs-feat"><i class="ti ti-check"></i> 依客戶查詢</div>
-          <div class="cs-feat"><i class="ti ti-check"></i> 依日期區間查詢</div>
-          <div class="cs-feat"><i class="ti ti-check"></i> 依品項查詢</div>
-          <div class="cs-feat"><i class="ti ti-check"></i> 匯出 CSV 報表</div>
+      <!-- 篩選區 -->
+      <div class="report-filter-card">
+        <div class="report-filter-row">
+          <div class="report-filter-item">
+            <label>客戶</label>
+            <select id="sale-filter-customer" onchange="renderSaleReport()">
+              <option value="">全部客戶</option>
+            </select>
+          </div>
+          <div class="report-filter-item">
+            <label>品項</label>
+            <input type="search" id="sale-filter-item" placeholder="品名或編號..." oninput="renderSaleReport()" />
+          </div>
         </div>
-        <div class="cs-badge">開發中</div>
+        <div class="report-filter-row">
+          <div class="report-filter-item">
+            <label>開始日期</label>
+            <input type="date" id="sale-date-from" onchange="renderSaleReport()" />
+          </div>
+          <div class="report-filter-item">
+            <label>結束日期</label>
+            <input type="date" id="sale-date-to" onchange="renderSaleReport()" />
+          </div>
+        </div>
+        <button class="report-clear-btn" onclick="clearReportFilter('sale')">
+          <i class="ti ti-x"></i> 清除篩選
+        </button>
       </div>
+      <!-- 統計列 -->
+      <div class="report-stats" id="sale-stats"></div>
+      <!-- 結果列表 -->
+      <div id="sale-report-list"></div>
     </div>
 
-    <!-- ========== PAGE: 進貨明細（架構預留） ========== -->
+    <!-- ========== PAGE: 進貨明細 ========== -->
     <div class="page" id="page-purchase-report">
       <div class="op-header">
-        <button class="back-btn" onclick="showPage('home')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-chart-line" style="color:#185FA5;"></i> 進貨明細</div>
+        <button class="back-btn" onclick="showPage('factory-menu')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-chart-line" style="color:#1D9E75;"></i> 進貨明細</div>
+        <button class="small-btn" onclick="exportReport('purchase')"><i class="ti ti-download"></i> 匯出</button>
       </div>
-      <div class="coming-soon-card">
-        <div class="cs-icon">📦</div>
-        <div class="cs-title">進貨明細查詢</div>
-        <div class="cs-desc">查詢所有進貨記錄<br>對應廠商與品項</div>
-        <div class="cs-features">
-          <div class="cs-feat"><i class="ti ti-check"></i> 依廠商查詢</div>
-          <div class="cs-feat"><i class="ti ti-check"></i> 依日期區間查詢</div>
-          <div class="cs-feat"><i class="ti ti-check"></i> 依品項查詢</div>
-          <div class="cs-feat"><i class="ti ti-check"></i> 匯出 CSV 報表</div>
+      <!-- 篩選區 -->
+      <div class="report-filter-card">
+        <div class="report-filter-row">
+          <div class="report-filter-item">
+            <label>廠商</label>
+            <select id="purchase-filter-supplier" onchange="renderPurchaseReport()">
+              <option value="">全部廠商</option>
+            </select>
+          </div>
+          <div class="report-filter-item">
+            <label>品項</label>
+            <input type="search" id="purchase-filter-item" placeholder="品名或編號..." oninput="renderPurchaseReport()" />
+          </div>
         </div>
-        <div class="cs-badge">開發中</div>
+        <div class="report-filter-row">
+          <div class="report-filter-item">
+            <label>開始日期</label>
+            <input type="date" id="purchase-date-from" onchange="renderPurchaseReport()" />
+          </div>
+          <div class="report-filter-item">
+            <label>結束日期</label>
+            <input type="date" id="purchase-date-to" onchange="renderPurchaseReport()" />
+          </div>
+        </div>
+        <button class="report-clear-btn" onclick="clearReportFilter('purchase')">
+          <i class="ti ti-x"></i> 清除篩選
+        </button>
       </div>
+      <!-- 統計列 -->
+      <div class="report-stats" id="purchase-stats"></div>
+      <!-- 結果列表 -->
+      <div id="purchase-report-list"></div>
     </div>
 
     <!-- ========== PAGE: 製程進度（架構預留） ========== -->
@@ -1103,5 +1151,6 @@
 <script src="js/order.js"></script>
 <script src="js/pos.js"></script>
 <script src="js/estimate.js"></script>
+<script src="js/report.js"></script>
 </body>
 </html>

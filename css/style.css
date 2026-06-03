@@ -506,3 +506,37 @@ main { flex: 1; overflow-y: auto; padding: var(--header-h) 0 calc(var(--nav-h) +
 .cust-info-row { display:flex; align-items:center; gap:10px; font-size:14px; color:var(--text); }
 .cust-info-row .ti { font-size:18px; color:var(--green); flex-shrink:0; }
 .cust-info-row.muted { color:var(--text3); }
+
+/* ===== 明細查詢頁 ===== */
+.report-filter-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; margin-bottom:10px; }
+.report-filter-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px; }
+.report-filter-row:last-of-type { margin-bottom:8px; }
+.report-filter-item { display:flex; flex-direction:column; gap:4px; }
+.report-filter-item label { font-size:12px; color:var(--text2); font-weight:500; }
+.report-filter-item select,
+.report-filter-item input { padding:8px 10px; font-size:13px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); font-family:var(--font); outline:none; width:100%; }
+.report-filter-item select:focus,
+.report-filter-item input:focus { border-color:var(--green); }
+.report-clear-btn { width:100%; padding:8px; font-size:13px; background:var(--bg); color:var(--text2); border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
+
+.report-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
+.report-stat-item { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 8px; text-align:center; }
+.report-stat-num { font-size:26px; font-weight:700; }
+.report-stat-label { font-size:11px; color:var(--text3); margin-top:3px; }
+
+.report-row { display:flex; align-items:center; gap:10px; padding:12px 14px; background:var(--surface); border-radius:var(--radius-sm); margin-bottom:6px; border:1px solid var(--border); }
+.report-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.report-row-info { flex:1; min-width:0; }
+.report-row-name { font-size:14px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.report-row-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:3px; }
+.report-id { font-size:11px; color:var(--text3); font-family:monospace; }
+.report-time { font-size:11px; color:var(--text3); display:flex; align-items:center; gap:3px; }
+.report-time .ti { font-size:12px; }
+.report-tag { font-size:11px; font-weight:500; padding:2px 7px; border-radius:10px; display:flex; align-items:center; gap:3px; }
+.report-tag .ti { font-size:12px; }
+.customer-tag { background:#E6F1FB; color:#0C447C; }
+.supplier-tag { background:var(--green-light); color:var(--green-dark); }
+.report-row-right { text-align:right; flex-shrink:0; }
+.report-row-qty { font-size:20px; font-weight:700; }
+.report-row-unit { font-size:11px; color:var(--text3); }
+.report-empty { padding:30px; text-align:center; color:var(--text3); font-size:14px; background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); }

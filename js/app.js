@@ -52,6 +52,12 @@ function showPage(name) {
   if (nb) nb.classList.add('active');
   stopScan();
   window.scrollTo(0, 0);
+  // 頁面進入時初始化
+  if (name === 'sale-report'     && typeof initSaleReport     === 'function') initSaleReport();
+  if (name === 'purchase-report' && typeof initPurchaseReport === 'function') initPurchaseReport();
+  if (name === 'customers'       && typeof renderCustomerList === 'function') renderCustomerList('');
+  if (name === 'estimate'        && typeof renderEstimateList === 'function') renderEstimateList('all');
+  if (name === 'history'         && typeof renderLogsFiltered === 'function') renderLogsFiltered();
 }
 
 // ----- HOME -----
