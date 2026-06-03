@@ -782,23 +782,7 @@
         </div>
       </div>
 
-      <!-- 新增客戶表單 Modal -->
-      <div class="modal-overlay" id="newCustomerModal" style="display:none;" onclick="closeNewCustomerModal(event)">
-        <div class="supplier-modal">
-          <div class="supplier-modal-title"><i class="ti ti-user-plus"></i> 新增客戶</div>
-          <div class="cust-form">
-            <div class="cust-field"><label>姓名 *</label><input type="text" id="nc-name" placeholder="客戶姓名" /></div>
-            <div class="cust-field"><label>電話</label><input type="tel" id="nc-tel" placeholder="09xx-xxxxxx" /></div>
-            <div class="cust-field"><label>Email</label><input type="email" id="nc-email" placeholder="email@example.com" /></div>
-            <div class="cust-field"><label>地址</label><input type="text" id="nc-addr" placeholder="送貨地址" /></div>
-            <div class="cust-field"><label>備註</label><input type="text" id="nc-note" placeholder="備註" /></div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
-            <button class="modal-ok-btn" onclick="saveNewCustomer()"><i class="ti ti-check"></i> 儲存</button>
-            <button class="modal-cancel-btn" onclick="closeNewCustomerModal()">取消</button>
-          </div>
-        </div>
-      </div>
+      <!-- 新增客戶 Modal 已移至全域 -->
 
       <!-- 加入品項 -->
       <div class="supplier-section" style="margin-bottom:10px;">
@@ -1088,6 +1072,24 @@
       <i class="ti ti-tool"></i><span>管理</span>
     </button>
   </nav>
+
+  <!-- 新增客戶表單 Modal（全域共用） -->
+  <div class="modal-overlay" id="newCustomerModal" style="display:none;" onclick="closeNewCustomerModal(event)">
+    <div class="supplier-modal">
+      <div class="supplier-modal-title"><i class="ti ti-user-plus"></i> 新增客戶</div>
+      <div class="cust-form">
+        <div class="cust-field"><label>姓名 *</label><input type="text" id="nc-name" placeholder="客戶姓名" /></div>
+        <div class="cust-field"><label>電話</label><input type="tel" id="nc-tel" placeholder="09xx-xxxxxx" /></div>
+        <div class="cust-field"><label>Email</label><input type="email" id="nc-email" placeholder="email@example.com" /></div>
+        <div class="cust-field"><label>地址</label><input type="text" id="nc-addr" placeholder="送貨地址" /></div>
+        <div class="cust-field"><label>備註</label><input type="text" id="nc-note" placeholder="備註" /></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+        <button class="modal-ok-btn" onclick="saveNewCustomer()"><i class="ti ti-check"></i> 儲存</button>
+        <button class="modal-cancel-btn" onclick="closeNewCustomerModal()">取消</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Toast -->
   <div class="toast" id="toast" role="alert" aria-live="polite"></div>

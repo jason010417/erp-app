@@ -83,6 +83,30 @@ function closeNewCustomerModal(e){
 function saveNewCustomer(){
   const name = document.getElementById('nc-name').value.trim();
   if(!name){ showToast('⚠️ 請填寫客戶姓名'); return; }
+
+  // 編輯模式
+  if(_editCustomerId){
+    const idx = customers.findIndex(x=>x.id===_editCustomerId);
+    if(idx>=0){
+      customers[idx] = {
+        ...customers[idx],
+        name,
+        tel:   document.getElementById('nc-tel').value.trim(),
+        email: document.getElementById('nc-email').value.trim(),
+        addr:  document.getElementById('nc-addr').value.trim(),
+        note:  document.getElementById('nc-note').value.trim(),
+      };
+      saveCustomers();
+      closeNewCustomerModal();
+      _editCustomerId = null;
+      showToast('✅ 客戶資料已更新');
+      renderCustomerList('');
+      showCustomerDetail(customers[idx].id);
+      return;
+    }
+  }
+
+  // 新增模式
   const c = {
     id: 'C' + Date.now(),
     name,
@@ -96,8 +120,8 @@ function saveNewCustomer(){
   saveCustomers();
   closeNewCustomerModal();
   showToast('✅ 客戶已新增：' + name);
+  renderCustomerList('');
   if(_customerFormFromPage === 'customers'){
-    renderCustomerList('');
     showPage('customers');
   } else {
     selectCustomer(c.id);
