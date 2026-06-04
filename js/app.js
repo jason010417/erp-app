@@ -60,7 +60,12 @@ function showPage(name) {
   if (name === 'estimate'        && typeof renderEstimateList === 'function') renderEstimateList('all');
   if (name === 'history'         && typeof renderLogsFiltered === 'function') renderLogsFiltered();
   if (name === 'process-track'   && typeof initProcessTrack  === 'function') initProcessTrack();
-  if (name === 'events' && typeof initEvents === 'function') initEvents();
+  if (name === 'events'          && typeof initEvents        === 'function') initEvents();
+  if (name === 'finance'         && typeof initFinance       === 'function') initFinance();
+  if (name === 'unpaid'          && typeof initUnpaid        === 'function') initUnpaid();
+  if (name === 'admin-products'  && typeof renderAdminProducts=== 'function') renderAdminProducts();
+  if (name === 'admin-suppliers' && typeof renderAdminSuppliers==='function') renderAdminSuppliers('');
+  if (name === 'admin-bom'       && typeof renderBomList     === 'function') renderBomList('');
   if (name === 'event-detail' && typeof currentEventId !== 'undefined' && currentEventId) viewEvent(currentEventId);
 }
 

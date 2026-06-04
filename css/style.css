@@ -678,3 +678,26 @@ main { flex: 1; overflow-y: auto; padding: var(--header-h) 0 calc(var(--nav-h) +
 .est-locked-banner .ti { font-size:18px; color:#BA7517; }
 .order-locked-banner { display:flex; align-items:center; gap:8px; padding:14px 16px; background:#FAEEDA; color:#633806; border-radius:var(--radius-sm); font-size:14px; font-weight:600; }
 .order-locked-banner .ti { font-size:20px; color:#BA7517; }
+
+/* ===== 付款狀態 ===== */
+.pay-status-row { display:flex; gap:6px; }
+.pay-status-btn { padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; border:1.5px solid var(--border); background:var(--surface); color:var(--text2); cursor:pointer; transition:all 0.1s; }
+.pay-status-btn.active { background:var(--green-light); color:var(--green-dark); border-color:var(--green-mid); }
+#ps-unpaid.active  { background:var(--red-light);   color:#791F1F; border-color:#F09595; }
+#ps-partial.active { background:var(--amber-light);  color:#633806; border-color:#EF9F27; }
+#ps-paid.active    { background:var(--green-light);  color:var(--green-dark); border-color:var(--green-mid); }
+
+/* ===== 財務總覽 ===== */
+.finance-month-row { display:flex; align-items:center; justify-content:center; gap:16px; padding:12px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:12px; }
+.finance-month-btn { width:36px; height:36px; border-radius:50%; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.finance-month-btn .ti { font-size:18px; color:var(--text2); }
+.finance-month-label { font-size:18px; font-weight:700; color:var(--text); min-width:120px; text-align:center; }
+.finance-stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
+.finance-stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 8px; text-align:center; }
+.finance-stat-num { font-size:22px; font-weight:700; }
+.finance-stat-label { font-size:11px; color:var(--text3); margin-top:4px; }
+.finance-chart-wrap { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; overflow-x:auto; }
+.finance-bar-chart { display:flex; align-items:flex-end; gap:3px; height:100px; min-width:300px; }
+.finance-bar-col { display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; min-width:8px; }
+.finance-bar { width:100%; border-radius:3px 3px 0 0; min-height:4px; transition:height 0.3s; }
+.finance-bar-label { font-size:9px; color:var(--text3); }

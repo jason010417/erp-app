@@ -253,6 +253,7 @@ function newEstimate(){
   };
   estDiscount = 0;
   estDelivery = 'pickup';
+  if(typeof selectPayStatus==='function') selectPayStatus('unpaid');
   document.getElementById('est-edit-title').textContent = '新增估價單';
   document.getElementById('est-no').textContent   = currentEstimate.no;
   document.getElementById('est-date').textContent = fmtDate(currentEstimate.date);
@@ -340,6 +341,7 @@ function unlockEstimateEdit(id){
     document.getElementById('dm-'+m)?.classList.toggle('active', m===estDelivery);
   });
   document.getElementById('est-remark').value = e.remark||'';
+  if(typeof applyPayStatus==='function') applyPayStatus(e);
   const c = customers.find(x=>x.id===e.customerId);
   if(c){
     document.getElementById('est-customer-name').textContent = c.name;
@@ -453,6 +455,12 @@ function _collectEstimate(){
   currentEstimate.delivery = estDelivery;
   currentEstimate.subtotal = sub;
   currentEstimate.total    = total;
+  // 付款狀態
+  if(typeof collectPayStatus==='function'){
+    const ps = collectPayStatus();
+    currentEstimate.payStatus  = ps.payStatus;
+    currentEstimate.paidAmount = ps.paidAmount;
+  }
   return total;
 }
 
