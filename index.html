@@ -742,10 +742,11 @@
       </div>
       <!-- 篩選 -->
       <div class="est-filter-row">
-        <button class="ftab active" id="ef-all"     onclick="filterEstimates('all')">全部</button>
-        <button class="ftab"        id="ef-pending" onclick="filterEstimates('pending')">待確認</button>
-        <button class="ftab"        id="ef-done"    onclick="filterEstimates('done')">已完成</button>
-        <button class="ftab"        id="ef-cancel"  onclick="filterEstimates('cancel')">已取消</button>
+        <button class="ftab active" id="ef-all"    onclick="filterEstimates('all')">全部</button>
+        <button class="ftab"        id="ef-proc"   onclick="filterEstimates('proc')">生產中</button>
+        <button class="ftab"        id="ef-done"   onclick="filterEstimates('done')">已完成</button>
+        <button class="ftab"        id="ef-cancel" onclick="filterEstimates('cancel')">已取消</button>
+        <button class="ftab"        id="ef-draft"  onclick="filterEstimates('draft')">草稿</button>
       </div>
       <div id="estimate-list"><div class="order-empty" style="padding:30px;text-align:center;color:var(--text3);">還沒有估價單<br>點右上角「新增」開始建立</div></div>
     </div>
@@ -755,7 +756,7 @@
       <div class="op-header">
         <button class="back-btn" onclick="showPage('estimate')"><i class="ti ti-arrow-left"></i></button>
         <div class="op-title" id="est-edit-title">新增估價單</div>
-        <button class="small-btn" onclick="saveEstimateDraft()"><i class="ti ti-device-floppy"></i> 存草稿</button>
+        <button class="small-btn green-btn" onclick="previewEstimate()"><i class="ti ti-eye"></i> 預覽</button>
       </div>
 
       <!-- 估價單號 + 日期 -->
@@ -858,9 +859,12 @@
       </div>
 
       <!-- 操作按鈕 -->
-      <div class="est-action-row">
-        <button class="est-act-btn preview" onclick="previewEstimate()"><i class="ti ti-eye"></i> 預覽 / PDF</button>
-        <button class="confirm-btn" style="flex:1;" onclick="confirmEstimate()"><i class="ti ti-check"></i> 確認估價單</button>
+      <button class="confirm-btn" style="background:#185FA5;margin-bottom:8px;" onclick="confirmAndCreateProcess()">
+        <i class="ti ti-player-play"></i> 確認並建立生產訂單
+      </button>
+      <div class="est-action-row" style="margin-bottom:4px;">
+        <button class="est-act-btn preview" onclick="previewEstimate()"><i class="ti ti-eye"></i> 預覽估價單</button>
+        <button class="est-act-btn" style="background:var(--bg);color:var(--text2);border:1px solid var(--border);" onclick="saveEstimateDraft()"><i class="ti ti-device-floppy"></i> 存草稿</button>
       </div>
     </div>
 
@@ -873,10 +877,6 @@
       </div>
       <div class="est-preview-wrap" id="est-preview-content"></div>
       <div class="est-confirm-actions" id="est-confirm-actions" style="display:none;">
-        <div class="section-title" style="margin-top:4px;"><i class="ti ti-check"></i> 客戶確認後</div>
-        <button class="confirm-btn" style="background:#185FA5;margin-bottom:8px;" onclick="estimateToProcess(currentEstimate.id)">
-          <i class="ti ti-player-play"></i> 轉為生產訂單
-        </button>
         <button class="redit-btn" onclick="cancelEstimate()">
           <i class="ti ti-x"></i> 取消此估價單
         </button>

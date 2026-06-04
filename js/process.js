@@ -204,21 +204,36 @@ function renderProcItems(){
 function estimateToProcess(estId){
   const e = typeof estimates!=='undefined' ? estimates.find(x=>x.id===estId) : null;
   if(!e) return;
-  currentProcOrder = {
-    id: null, no: genProcNo(),
-    createdAt: new Date().toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),
-    deadline:'', sourceRef: e.no, customerId: e.customerId,
-    items: e.items.map(i=>({id:i.id,name:i.name,emoji:i.emoji,qty:i.qty})),
+
+  // 直接建立生產訂單，不需要再填一次表單
+  const now = new Date().toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const newOrder = {
+    id: 'PO'+Date.now(),
+    no: genProcNo(),
+    createdAt: now,
+    deadline: '',
+    sourceRef: e.no,
+    customerId: e.customerId,
+    items: e.items.map(i=>({id:i.id, name:i.name, emoji:i.emoji, qty:i.qty})),
     delivery: e.delivery||'pickup',
-    remark:'', status:'prepare', statusLog:[]
+    remark: e.remark||'',
+    status: 'prepare',
+    statusLog: [{ status:'prepare', label:'備料中', time:now, note:'由估價單 '+e.no+' 建立' }]
   };
-  resetProcEditForm();
-  document.getElementById('proc-source-ref').value = e.no;
-  if(e.customerId){
-    const c = typeof customers!=='undefined' ? customers.find(x=>x.id===e.customerId) : null;
-    if(c) document.getElementById('proc-customer-name').textContent = c.name;
-  }
-  showPage('process-edit');
+  productionOrders.push(newOrder);
+  saveProdOrders();
+  renderOrderList_proc();
+
+  // 同時標記估價單為生產中
+  const ei = typeof estimates!=='undefined' ? estimates.findIndex(x=>x.id===estId) : -1;
+  if(ei>=0){ estimates[ei].status='proc'; saveEstimates(); }
+
+  showToast('✅ 生產訂單已建立：'+newOrder.no);
+
+  // 直接跳到製程詳細頁
+  currentProcOrder = JSON.parse(JSON.stringify(newOrder));
+  renderProcDetail();
+  showPage('process-detail');
 }
 
 function saveProcDraft(){
@@ -373,6 +388,11 @@ function advanceProcStatus(){
       logs.push({op:'ship',op_label:'生產出貨',id:item.id,name:item.name,emoji:item.emoji,qty:item.qty,time:now});
     });
     saveInventory(); saveLogs();
+    // 同步把對應估價單標為已完成
+    if(currentProcOrder.sourceRef && typeof estimates!=='undefined'){
+      const ei = estimates.findIndex(e=>e.no===currentProcOrder.sourceRef);
+      if(ei>=0){ estimates[ei].status='done'; saveEstimates(); }
+    }
     renderHome(); renderFinished(); renderMaterials(); renderLogs();
   }
   _upsertProcOrder();

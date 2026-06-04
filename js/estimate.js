@@ -235,9 +235,9 @@ function editCurrentCustomer(){
 let currentEstimate = { id:null, no:'', date:'', expire:'', customerId:null, items:[], discount:0, remark:'', status:'pending' };
 let estDiscount = 0;
 
-function statusLabel(s){ return {pending:'待確認',done:'已完成',cancel:'已取消',draft:'草稿'}[s]||s; }
-function statusIcon(s) { return {pending:'📋',done:'✅',cancel:'❌',draft:'📝'}[s]||'📋'; }
-function statusColor(s){ return {pending:'#BA7517',done:'#1D9E75',cancel:'#E24B4A',draft:'#6B6B68'}[s]||'#BA7517'; }
+function statusLabel(s){ return {pending:'待確認',proc:'生產中',done:'已完成',cancel:'已取消',draft:'草稿'}[s]||s; }
+function statusIcon(s) { return {pending:'📋',proc:'⚙️',done:'✅',cancel:'❌',draft:'📝'}[s]||'📋'; }
+function statusColor(s){ return {pending:'#BA7517',proc:'#185FA5',done:'#1D9E75',cancel:'#E24B4A',draft:'#6B6B68'}[s]||'#BA7517'; }
 
 function newEstimate(){
   currentEstimate = {
@@ -408,6 +408,21 @@ function saveEstimateDraft(){
   showToast('📝 草稿已儲存：'+currentEstimate.no);
 }
 
+
+// ── 一步確認並建立生產訂單 ──
+function confirmAndCreateProcess(){
+  if(!currentEstimate.customerId){ showToast('⚠️ 請先選擇客戶'); return; }
+  if(!currentEstimate.items.length){ showToast('⚠️ 請先加入品項'); return; }
+  _collectEstimate();
+  currentEstimate.status = 'proc';
+  if(!currentEstimate.id) currentEstimate.id = 'E'+Date.now();
+  _upsertEstimate();
+  // 直接建立生產訂單並跳轉
+  if(typeof estimateToProcess === 'function'){
+    estimateToProcess(currentEstimate.id);
+  }
+}
+
 function confirmEstimate(){
   if(!currentEstimate.customerId){ showToast('⚠️ 請先選擇客戶'); return; }
   if(!currentEstimate.items.length){ showToast('⚠️ 請先加入品項'); return; }
@@ -437,7 +452,10 @@ function filterEstimates(status){
 
 function renderEstimateList(status){
   const list = document.getElementById('estimate-list');
-  let items = status==='all' ? estimates : estimates.filter(e=>e.status===status);
+  // 'pending' 狀態視同 'proc'（相容舊資料）
+  let items = status==='all' ? estimates :
+    status==='proc' ? estimates.filter(e=>e.status==='proc'||e.status==='pending') :
+    estimates.filter(e=>e.status===status);
   items = items.slice().reverse();
   if(!items.length){
     list.innerHTML='<div class="order-empty" style="padding:30px;text-align:center;color:var(--text3);">沒有符合的估價單</div>';
