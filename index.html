@@ -552,9 +552,21 @@
     <!-- ========== PAGE: POS 收款 ========== -->
     <div class="page" id="page-pos">
       <div class="op-header">
-        <button class="back-btn" onclick="showPage('home')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-cash-register" style="color:#BA7517;"></i> POS 收款</div>
+        <button class="back-btn" onclick="posBack()"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title" id="pos-title"><i class="ti ti-cash-register" style="color:#BA7517;"></i> POS 收款</div>
         <button class="small-btn" onclick="clearPOS()"><i class="ti ti-trash"></i> 清空</button>
+      </div>
+      <!-- 外展模式 banner -->
+      <div id="event-pos-banner" style="display:none;">
+        <div class="event-banner" onclick="showPage('event-detail-' + currentEventId)">
+          <i class="ti ti-map-pin"></i>
+          <span id="event-banner-name">外展活動</span>
+          <span id="event-banner-day" class="event-banner-day"></span>
+          <i class="ti ti-chevron-right" style="margin-left:auto;"></i>
+        </div>
+        <!-- 外展商品快捷按鈕 -->
+        <div class="event-quick-label">外展商品</div>
+        <div class="event-quick-grid" id="eventQuickGrid"></div>
       </div>
       <div class="pos-scan-row">
         <div class="scan-box pos-scanbox" id="posScanBox" onclick="togglePosScan()">
@@ -1182,7 +1194,116 @@
           <span class="sb-name">銷貨明細</span>
           <span class="sb-sub">查詢銷售記錄</span>
         </button>
+        <button class="submenu-btn" style="background:#EDE9F8;color:#3D2780;border-color:#C4B5F4;" onclick="showPage('events')">
+          <i class="ti ti-map-pin"></i>
+          <span class="sb-name">外展活動</span>
+          <span class="sb-sub">展覽管理與POS</span>
+        </button>
       </div>
+    </div>
+
+
+    <!-- ========== PAGE: 外展活動列表 ========== -->
+    <div class="page" id="page-events">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-map-pin" style="color:#6B4FBB;"></i> 外展活動</div>
+        <button class="small-btn green-btn" onclick="newEvent()"><i class="ti ti-plus"></i> 新增</button>
+      </div>
+      <div class="est-filter-row">
+        <button class="ftab active" id="evf-all"     onclick="filterEvents('all')">全部</button>
+        <button class="ftab"        id="evf-active"  onclick="filterEvents('active')">進行中</button>
+        <button class="ftab"        id="evf-upcoming"onclick="filterEvents('upcoming')">即將開始</button>
+        <button class="ftab"        id="evf-ended"   onclick="filterEvents('ended')">已結束</button>
+      </div>
+      <div id="event-list"></div>
+    </div>
+
+    <!-- ========== PAGE: 新增/編輯外展 ========== -->
+    <div class="page" id="page-event-edit">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('events')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title" id="event-edit-title">新增外展活動</div>
+        <button class="small-btn green-btn" onclick="saveEvent()"><i class="ti ti-check"></i> 儲存</button>
+      </div>
+
+      <!-- 基本資訊 -->
+      <div class="event-form-card">
+        <div class="cust-form-section" style="border-top:none;padding-top:0;margin-top:0;">活動資訊</div>
+        <div class="cust-field">
+          <label>活動名稱 *</label>
+          <input type="text" id="ev-name" placeholder="例：2025 台灣美食博覽會" />
+        </div>
+        <div class="cust-field">
+          <label>地點 *</label>
+          <input type="text" id="ev-location" placeholder="例：台北世貿一館 B區 123攤" />
+        </div>
+        <div class="event-date-row">
+          <div class="cust-field" style="flex:1;">
+            <label>開始日期 *</label>
+            <input type="date" id="ev-start" />
+          </div>
+          <div class="event-date-sep">〜</div>
+          <div class="cust-field" style="flex:1;">
+            <label>結束日期 *</label>
+            <input type="date" id="ev-end" />
+          </div>
+        </div>
+        <div class="cust-field">
+          <label>參展人員</label>
+          <input type="text" id="ev-staff" placeholder="例：王小明、陳小華" />
+        </div>
+        <div class="cust-field">
+          <label>備註</label>
+          <textarea id="ev-note" rows="2" placeholder="天氣、人流、注意事項..."
+            style="width:100%;padding:10px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);resize:none;font-family:var(--font);outline:none;"></textarea>
+        </div>
+      </div>
+
+      <!-- 外展商品選擇 -->
+      <div class="event-form-card">
+        <div class="cust-form-section" style="border-top:none;padding-top:0;margin-top:0;">帶去的商品</div>
+        <div class="supplier-label" style="margin-bottom:8px;font-size:12px;color:var(--text2);">選好商品後，外展 POS 只會顯示這些品項</div>
+        <div class="search-bar" style="margin-bottom:8px;">
+          <i class="ti ti-search"></i>
+          <input type="search" id="ev-item-search" placeholder="搜尋商品加入外展清單..." oninput="evSearchItems(this.value)" />
+        </div>
+        <div id="ev-search-result" style="display:none;max-height:200px;overflow-y:auto;margin-bottom:8px;"></div>
+        <div class="order-list-header">
+          <span class="order-list-title"><i class="ti ti-package"></i> 外展商品清單</span>
+          <span class="order-count" id="ev-item-count">0 項</span>
+        </div>
+        <div class="order-list" id="ev-item-list">
+          <div class="order-empty">尚未選擇商品</div>
+        </div>
+      </div>
+
+      <button class="confirm-btn" style="background:#6B4FBB;margin-top:4px;" onclick="saveEvent()">
+        <i class="ti ti-check"></i> 儲存外展活動
+      </button>
+    </div>
+
+    <!-- ========== PAGE: 外展詳細 / 報告 ========== -->
+    <div class="page" id="page-event-detail">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('events')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title" id="event-detail-title">外展活動</div>
+        <button class="small-btn" onclick="editCurrentEvent()"><i class="ti ti-edit"></i> 編輯</button>
+      </div>
+
+      <!-- 活動資訊 -->
+      <div class="event-info-card" id="event-info-card"></div>
+
+      <!-- 開始外展 POS 按鈕 -->
+      <div id="event-start-section"></div>
+
+      <!-- 每日銷售 -->
+      <div class="section-title" style="margin-top:14px;"><i class="ti ti-chart-bar"></i> 銷售報告</div>
+      <div id="event-report-section"></div>
+
+      <!-- 商品銷售排行 -->
+      <div class="section-title" style="margin-top:14px;"><i class="ti ti-trophy"></i> 商品銷售排行</div>
+      <div id="event-ranking-section"></div>
     </div>
 
   </main>
@@ -1250,5 +1371,6 @@
 <script src="js/estimate.js"></script>
 <script src="js/report.js"></script>
 <script src="js/process.js"></script>
+<script src="js/event.js"></script>
 </body>
 </html>

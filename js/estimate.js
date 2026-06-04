@@ -60,9 +60,11 @@ function selectCustomer(id){
   document.getElementById('est-customer-name').textContent = c.name;
   const info = document.getElementById('est-customer-info');
   let lines=[];
-  if(c.tel)   lines.push(`📞 ${c.tel}`);
-  if(c.email) lines.push(`✉️ ${c.email}`);
-  if(c.addr)  lines.push(`📍 ${c.addr}`);
+  if(c.contact)  lines.push(`👤 ${c.contact}`);
+  if(c.tel)      lines.push(`📞 ${c.tel}`);
+  if(c.email)    lines.push(`✉️ ${c.email}`);
+  if(c.receiver) lines.push(`📦 收件人：${c.receiver}`);
+  if(c.addr)     lines.push(`📍 ${c.addr}`);
   document.getElementById('est-customer-detail').innerHTML = lines.join('<br>') || '無詳細資料';
   info.style.display = 'block';
   closeCustomerModal();
@@ -70,8 +72,11 @@ function selectCustomer(id){
 
 function openNewCustomerForm(fromCustomerPage){
   _customerFormFromPage = fromCustomerPage ? 'customers' : 'estimate-edit';
-  ['nc-name','nc-tel','nc-email','nc-addr','nc-note'].forEach(id=>{
-    document.getElementById(id).value='';
+  _editCustomerId = null;
+  ['nc-name','nc-contact','nc-tel','nc-email','nc-fax',
+   'nc-company-title','nc-tax-id','nc-receiver','nc-receiver-tel','nc-addr'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value='';
   });
   document.getElementById('newCustomerModal').style.display = 'flex';
   document.getElementById('customerModal').style.display = 'none';
@@ -82,20 +87,26 @@ function closeNewCustomerModal(e){
 }
 function saveNewCustomer(){
   const name = document.getElementById('nc-name').value.trim();
-  if(!name){ showToast('⚠️ 請填寫客戶姓名'); return; }
+  if(!name){ showToast('⚠️ 請填寫公司名稱或客戶姓名'); return; }
+
+  const fields = {
+    name,
+    contact:      document.getElementById('nc-contact')?.value.trim()||'',
+    tel:          document.getElementById('nc-tel').value.trim(),
+    email:        document.getElementById('nc-email').value.trim(),
+    fax:          document.getElementById('nc-fax')?.value.trim()||'',
+    companyTitle: document.getElementById('nc-company-title')?.value.trim()||'',
+    taxId:        document.getElementById('nc-tax-id')?.value.trim()||'',
+    receiver:     document.getElementById('nc-receiver')?.value.trim()||'',
+    receiverTel:  document.getElementById('nc-receiver-tel')?.value.trim()||'',
+    addr:         document.getElementById('nc-addr').value.trim(),
+  };
 
   // 編輯模式
   if(_editCustomerId){
     const idx = customers.findIndex(x=>x.id===_editCustomerId);
     if(idx>=0){
-      customers[idx] = {
-        ...customers[idx],
-        name,
-        tel:   document.getElementById('nc-tel').value.trim(),
-        email: document.getElementById('nc-email').value.trim(),
-        addr:  document.getElementById('nc-addr').value.trim(),
-        note:  document.getElementById('nc-note').value.trim(),
-      };
+      customers[idx] = { ...customers[idx], ...fields };
       saveCustomers();
       closeNewCustomerModal();
       _editCustomerId = null;
@@ -107,21 +118,13 @@ function saveNewCustomer(){
   }
 
   // 新增模式
-  const c = {
-    id: 'C' + Date.now(),
-    name,
-    tel:   document.getElementById('nc-tel').value.trim(),
-    email: document.getElementById('nc-email').value.trim(),
-    addr:  document.getElementById('nc-addr').value.trim(),
-    note:  document.getElementById('nc-note').value.trim(),
-    createdAt: today()
-  };
+  const c = { id:'C'+Date.now(), ...fields, createdAt:today() };
   customers.push(c);
   saveCustomers();
   closeNewCustomerModal();
-  showToast('✅ 客戶已新增：' + name);
+  showToast('✅ 客戶已新增：'+name);
   renderCustomerList('');
-  if(_customerFormFromPage === 'customers'){
+  if(_customerFormFromPage==='customers'){
     showPage('customers');
   } else {
     selectCustomer(c.id);
@@ -158,13 +161,21 @@ function showCustomerDetail(id){
   document.getElementById('cust-detail-name').textContent = c.name;
   document.getElementById('cust-detail-card').innerHTML = `
     <div class="cust-info-block">
-      ${c.tel   ? `<div class="cust-info-row"><i class="ti ti-phone"></i>${c.tel}</div>`:''}
-      ${c.email ? `<div class="cust-info-row"><i class="ti ti-mail"></i>${c.email}</div>`:''}
-      ${c.addr  ? `<div class="cust-info-row"><i class="ti ti-map-pin"></i>${c.addr}</div>`:''}
-      ${c.note  ? `<div class="cust-info-row"><i class="ti ti-notes"></i>${c.note}</div>`:''}
+      <div class="cust-section-label">聯絡資訊</div>
+      ${c.contact     ? `<div class="cust-info-row"><i class="ti ti-user"></i>承辦人：${c.contact}</div>`:''}
+      ${c.tel         ? `<div class="cust-info-row"><i class="ti ti-phone"></i>承辦電話：${c.tel}</div>`:''}
+      ${c.email       ? `<div class="cust-info-row"><i class="ti ti-mail"></i>E-mail：${c.email}</div>`:''}
+      ${c.fax         ? `<div class="cust-info-row"><i class="ti ti-device-fax"></i>傳真：${c.fax}</div>`:''}
+      ${(c.companyTitle||c.taxId) ? `<div class="cust-section-label" style="margin-top:10px;">發票資訊</div>`:''}
+      ${c.companyTitle? `<div class="cust-info-row"><i class="ti ti-receipt"></i>公司抬頭：${c.companyTitle}</div>`:''}
+      ${c.taxId       ? `<div class="cust-info-row"><i class="ti ti-hash"></i>統一編號：${c.taxId}</div>`:''}
+      ${(c.receiver||c.receiverTel||c.addr) ? `<div class="cust-section-label" style="margin-top:10px;">收件資訊</div>`:''}
+      ${c.receiver    ? `<div class="cust-info-row"><i class="ti ti-package"></i>收件人：${c.receiver}</div>`:''}
+      ${c.receiverTel ? `<div class="cust-info-row"><i class="ti ti-phone"></i>收件電話：${c.receiverTel}</div>`:''}
+      ${c.addr        ? `<div class="cust-info-row"><i class="ti ti-map-pin"></i>收件地址：${c.addr}</div>`:''}
+      <div class="cust-section-label" style="margin-top:10px;"></div>
       <div class="cust-info-row muted"><i class="ti ti-calendar"></i>建立日期：${fmtDate(c.createdAt)}</div>
     </div>`;
-  // 估價歷史
   const ests = estimates.filter(e=>e.customerId===id).slice().reverse();
   const hist = document.getElementById('cust-estimate-history');
   if(!ests.length){
@@ -178,7 +189,7 @@ function showCustomerDetail(id){
           <div class="catdetail-id">${fmtDate(e.date)} ・ ${statusLabel(e.status)}</div>
         </div>
         <div class="catdetail-right">
-          <div style="font-size:18px;font-weight:700;color:var(--text);">$${e.total}</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text);">$${e.total||0}</div>
         </div>
       </div>`).join('');
   }
@@ -191,13 +202,18 @@ function editCurrentCustomer(){
   const c = customers.find(x=>x.name===name);
   if(!c) return;
   _editCustomerId = c.id;
-  document.getElementById('nc-name').value  = c.name;
-  document.getElementById('nc-tel').value   = c.tel||'';
-  document.getElementById('nc-email').value = c.email||'';
-  document.getElementById('nc-addr').value  = c.addr||'';
-  document.getElementById('nc-note').value  = c.note||'';
+  const setVal = (id, val) => { const el=document.getElementById(id); if(el) el.value=val||''; };
+  setVal('nc-name',         c.name);
+  setVal('nc-contact',      c.contact);
+  setVal('nc-tel',          c.tel);
+  setVal('nc-email',        c.email);
+  setVal('nc-fax',          c.fax);
+  setVal('nc-company-title',c.companyTitle);
+  setVal('nc-tax-id',       c.taxId);
+  setVal('nc-receiver',     c.receiver);
+  setVal('nc-receiver-tel', c.receiverTel);
+  setVal('nc-addr',         c.addr);
   _customerFormFromPage = 'customer-detail';
-  // hijack save
   document.getElementById('newCustomerModal').style.display = 'flex';
 }
 
@@ -447,8 +463,14 @@ function previewEstimate(){
       <div class="est-pdf-meta">
         <div class="est-pdf-meta-col">
           <div class="est-pdf-meta-row"><span>客戶</span><strong>${c?c.name:'—'}</strong></div>
-          ${c&&c.tel?`<div class="est-pdf-meta-row"><span>電話</span><span>${c.tel}</span></div>`:''}
-          ${c&&c.addr?`<div class="est-pdf-meta-row"><span>地址</span><span>${c.addr}</span></div>`:''}
+          ${c&&c.contact?`<div class="est-pdf-meta-row"><span>承辦人</span><span>${c.contact}</span></div>`:''}
+          ${c&&c.tel?`<div class="est-pdf-meta-row"><span>承辦電話</span><span>${c.tel}</span></div>`:''}
+          ${c&&c.fax?`<div class="est-pdf-meta-row"><span>傳真</span><span>${c.fax}</span></div>`:''}
+          ${c&&c.companyTitle?`<div class="est-pdf-meta-row"><span>發票抬頭</span><span>${c.companyTitle}</span></div>`:''}
+          ${c&&c.taxId?`<div class="est-pdf-meta-row"><span>統一編號</span><span>${c.taxId}</span></div>`:''}
+          ${c&&c.receiver?`<div class="est-pdf-meta-row"><span>收件人</span><span>${c.receiver}</span></div>`:''}
+          ${c&&c.receiverTel?`<div class="est-pdf-meta-row"><span>收件電話</span><span>${c.receiverTel}</span></div>`:''}
+          ${c&&c.addr?`<div class="est-pdf-meta-row"><span>收件地址</span><span>${c.addr}</span></div>`:''}
         </div>
         <div class="est-pdf-meta-col right">
           <div class="est-pdf-meta-row"><span>單號</span><strong>${currentEstimate.no}</strong></div>

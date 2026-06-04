@@ -52,6 +52,7 @@ function showPage(name) {
   if (nb) nb.classList.add('active');
   stopScan();
   window.scrollTo(0, 0);
+  if (name !== 'pos') { const b = document.getElementById('event-pos-banner'); if(b) b.style.display='none'; }
   // 頁面進入時初始化
   if (name === 'sale-report'     && typeof initSaleReport     === 'function') initSaleReport();
   if (name === 'purchase-report' && typeof initPurchaseReport === 'function') initPurchaseReport();
@@ -59,6 +60,8 @@ function showPage(name) {
   if (name === 'estimate'        && typeof renderEstimateList === 'function') renderEstimateList('all');
   if (name === 'history'         && typeof renderLogsFiltered === 'function') renderLogsFiltered();
   if (name === 'process-track'   && typeof initProcessTrack  === 'function') initProcessTrack();
+  if (name === 'events' && typeof initEvents === 'function') initEvents();
+  if (name === 'event-detail' && typeof currentEventId !== 'undefined' && currentEventId) viewEvent(currentEventId);
 }
 
 // ----- HOME -----
