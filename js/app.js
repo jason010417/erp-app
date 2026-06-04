@@ -58,6 +58,7 @@ function showPage(name) {
   if (name === 'customers'       && typeof renderCustomerList === 'function') renderCustomerList('');
   if (name === 'estimate'        && typeof renderEstimateList === 'function') renderEstimateList('all');
   if (name === 'history'         && typeof renderLogsFiltered === 'function') renderLogsFiltered();
+  if (name === 'process-track'   && typeof initProcessTrack  === 'function') initProcessTrack();
 }
 
 // ----- HOME -----

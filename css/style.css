@@ -540,3 +540,44 @@ main { flex: 1; overflow-y: auto; padding: var(--header-h) 0 calc(var(--nav-h) +
 .report-row-qty { font-size:20px; font-weight:700; }
 .report-row-unit { font-size:11px; color:var(--text3); }
 .report-empty { padding:30px; text-align:center; color:var(--text3); font-size:14px; background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); }
+
+/* ===== 製程進度 ===== */
+.proc-empty { padding:30px 16px; }
+.proc-list-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:10px; cursor:pointer; transition:all 0.1s; }
+.proc-list-card:active { background:var(--bg); }
+.proc-list-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.proc-list-no { font-size:16px; font-weight:700; color:var(--text); }
+.proc-status-badge { display:flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:700; }
+.proc-status-badge .ti { font-size:14px; }
+.proc-list-items { font-size:13px; color:var(--text2); margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.proc-list-meta { display:flex; flex-wrap:wrap; gap:8px; font-size:11px; color:var(--text3); margin-bottom:10px; }
+.proc-list-meta span { display:flex; align-items:center; gap:3px; }
+.proc-list-meta .ti { font-size:12px; }
+
+/* 迷你進度條 */
+.proc-mini-bar { display:flex; align-items:center; gap:0; }
+.proc-mini-step { display:flex; flex-direction:column; align-items:center; gap:3px; flex-shrink:0; }
+.proc-mini-dot { width:10px; height:10px; border-radius:50%; background:var(--border); border:1.5px solid var(--border); transition:background 0.2s; }
+.proc-mini-step.active .proc-mini-dot { border-color:transparent; }
+.proc-mini-label { font-size:9px; color:var(--text3); white-space:nowrap; }
+.proc-mini-step.active .proc-mini-label { color:var(--text2); font-weight:600; }
+.proc-mini-line { flex:1; height:2px; background:var(--border); margin:0 2px; margin-bottom:12px; }
+.proc-mini-line.active { background:var(--green); }
+
+/* 詳細頁進度條 */
+.proc-progress-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 10px; margin-top:4px; }
+.proc-progress-steps { display:flex; align-items:flex-start; }
+.proc-step-col { display:flex; flex-direction:column; align-items:center; gap:6px; flex-shrink:0; min-width:60px; }
+.proc-step-circle { width:44px; height:44px; border-radius:50%; border:2px solid var(--border); background:var(--bg); display:flex; align-items:center; justify-content:center; transition:all 0.2s; }
+.proc-step-circle .ti { font-size:20px; color:var(--text3); }
+.proc-step-col.active .proc-step-circle { box-shadow:0 2px 8px rgba(0,0,0,0.12); }
+.proc-step-label { font-size:11px; color:var(--text3); text-align:center; line-height:1.3; }
+.proc-step-line { flex:1; height:2px; background:var(--border); margin:0 4px; margin-top:22px; }
+.proc-step-line.active { background:var(--green); }
+
+/* 來源輸入 */
+.proc-source-row { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:10px; }
+.proc-source-label { font-size:12px; color:var(--text2); margin-bottom:6px; display:flex; align-items:center; gap:5px; }
+.proc-source-label .ti { font-size:15px; color:var(--green); }
+.proc-source-input { width:100%; padding:8px 10px; font-size:14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-family:var(--font); outline:none; }
+.proc-source-input:focus { border-color:var(--green); }

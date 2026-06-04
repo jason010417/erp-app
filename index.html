@@ -854,6 +854,9 @@
             <i class="ti ti-truck"></i> 轉出貨單
           </button>
         </div>
+        <button class="confirm-btn" style="background:#185FA5;margin-bottom:8px;" onclick="estimateToProcess(currentEstimate.id)">
+          <i class="ti ti-player-play"></i> 轉生產訂單
+        </button>
         <button class="redit-btn" onclick="cancelEstimate()">
           <i class="ti ti-x"></i> 取消此估價單
         </button>
@@ -969,23 +972,105 @@
     </div>
 
     <!-- ========== PAGE: 製程進度（架構預留） ========== -->
+    <!-- ========== PAGE: 製程進度列表 ========== -->
     <div class="page" id="page-process-track">
       <div class="op-header">
-        <button class="back-btn" onclick="showPage('home')"><i class="ti ti-arrow-left"></i></button>
+        <button class="back-btn" onclick="showPage('factory-menu')"><i class="ti ti-arrow-left"></i></button>
         <div class="op-title"><i class="ti ti-list-check" style="color:#185FA5;"></i> 製程進度</div>
+        <button class="small-btn green-btn" onclick="newProductionOrder()"><i class="ti ti-plus"></i> 新增</button>
       </div>
-      <div class="coming-soon-card">
-        <div class="cs-icon">🏭</div>
-        <div class="cs-title">製程進度追蹤</div>
-        <div class="cs-desc">追蹤每張生產單的進度<br>從備料到出貨全程掌握</div>
-        <div class="cs-features">
-          <div class="cs-feat"><i class="ti ti-check"></i> 備料中</div>
-          <div class="cs-feat"><i class="ti ti-check"></i> 生產中</div>
-          <div class="cs-feat"><i class="ti ti-check"></i> 品檢完成</div>
-          <div class="cs-feat"><i class="ti ti-check"></i> 出貨完成</div>
+      <!-- 狀態篩選 -->
+      <div class="est-filter-row">
+        <button class="ftab active" id="pf-all"      onclick="filterOrders('all')">全部</button>
+        <button class="ftab"        id="pf-prepare"  onclick="filterOrders('prepare')">備料中</button>
+        <button class="ftab"        id="pf-producing" onclick="filterOrders('producing')">生產中</button>
+        <button class="ftab"        id="pf-done"     onclick="filterOrders('done')">完成</button>
+        <button class="ftab"        id="pf-shipped"  onclick="filterOrders('shipped')">已出貨</button>
+      </div>
+      <div id="process-order-list"></div>
+    </div>
+
+    <!-- ========== PAGE: 新增/編輯生產訂單 ========== -->
+    <div class="page" id="page-process-edit">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('process-track')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title" id="proc-edit-title">新增生產訂單</div>
+        <button class="small-btn" onclick="saveProcDraft()"><i class="ti ti-device-floppy"></i> 儲存</button>
+      </div>
+      <!-- 訂單資訊 -->
+      <div class="est-meta-row">
+        <div class="est-meta-box">
+          <div class="est-meta-label">單號</div>
+          <div class="est-meta-val" id="proc-no">—</div>
         </div>
-        <div class="cs-badge">開發中</div>
+        <div class="est-meta-box">
+          <div class="est-meta-label">建立日期</div>
+          <div class="est-meta-val" id="proc-date">—</div>
+        </div>
+        <div class="est-meta-box">
+          <div class="est-meta-label">預計完成</div>
+          <input class="est-meta-input" type="date" id="proc-deadline" />
+        </div>
       </div>
+      <!-- 來源 -->
+      <div class="proc-source-row">
+        <div class="proc-source-label"><i class="ti ti-link"></i> 來源單號（選填）</div>
+        <input type="text" id="proc-source-ref" placeholder="如：估價單 Q250603-001" class="proc-source-input" />
+      </div>
+      <!-- 客戶 -->
+      <div class="supplier-section" style="margin-bottom:10px;">
+        <div class="supplier-label"><i class="ti ti-user"></i> 客戶（選填）</div>
+        <div class="supplier-selected" id="proc-customer-display" onclick="openProcCustomerPicker()">
+          <span id="proc-customer-name">選擇客戶 ▾</span>
+        </div>
+      </div>
+      <!-- 加入品項 -->
+      <div class="supplier-section" style="margin-bottom:10px;">
+        <div class="supplier-label"><i class="ti ti-package"></i> 加入成品</div>
+        <div class="search-bar" style="margin-bottom:6px;">
+          <i class="ti ti-search"></i>
+          <input type="search" id="proc-item-search" placeholder="搜尋成品名稱..." oninput="procSearchItems(this.value)" />
+        </div>
+        <div id="proc-search-result" style="display:none;max-height:180px;overflow-y:auto;"></div>
+      </div>
+      <!-- 品項清單 -->
+      <div class="order-list-header">
+        <span class="order-list-title"><i class="ti ti-list"></i> 生產品項</span>
+        <span class="order-count" id="proc-item-count">0 項</span>
+      </div>
+      <div class="order-list" id="proc-item-list"><div class="order-empty">尚未加入品項</div></div>
+      <!-- 備註 -->
+      <div class="cust-field" style="margin-top:10px;">
+        <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:6px;"><i class="ti ti-notes"></i> 備註</label>
+        <textarea id="proc-remark" rows="2" placeholder="備註或特殊說明..."
+          style="width:100%;padding:10px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);resize:none;font-family:var(--font);"></textarea>
+      </div>
+      <button class="confirm-btn" style="margin-top:10px;background:#185FA5;" onclick="confirmProcOrder()">
+        <i class="ti ti-check"></i> 建立生產訂單
+      </button>
+    </div>
+
+    <!-- ========== PAGE: 製程進度詳細 ========== -->
+    <div class="page" id="page-process-detail">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('process-track')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title" id="proc-detail-no">生產訂單</div>
+        <button class="small-btn" onclick="editProcOrder()"><i class="ti ti-edit"></i> 編輯</button>
+      </div>
+      <!-- 狀態進度條 -->
+      <div class="proc-progress-card" id="proc-progress-card"></div>
+      <!-- 品項列表 -->
+      <div class="section-title" style="margin-top:14px;"><i class="ti ti-package"></i> 生產品項</div>
+      <div id="proc-detail-items"></div>
+      <!-- 客戶與備註 -->
+      <div class="section-title" style="margin-top:14px;"><i class="ti ti-info-circle"></i> 訂單資訊</div>
+      <div class="cust-detail-card" id="proc-detail-info"></div>
+      <!-- 狀態更新按鈕 -->
+      <div class="section-title" style="margin-top:14px;"><i class="ti ti-arrow-right"></i> 更新狀態</div>
+      <div id="proc-status-actions"></div>
+      <!-- 操作記錄 -->
+      <div class="section-title" style="margin-top:14px;"><i class="ti ti-history"></i> 狀態紀錄</div>
+      <div class="order-list" id="proc-status-log"></div>
     </div>
 
     <!-- ========== PAGE: 後台管理（架構預留） ========== -->
@@ -1139,6 +1224,18 @@
     </div>
   </div>
 
+  <!-- 製程訂單客戶選擇 Modal -->
+  <div class="modal-overlay" id="procCustomerModal" style="display:none;" onclick="closeProcCustomerModal(event)">
+    <div class="supplier-modal">
+      <div class="supplier-modal-title"><i class="ti ti-users"></i> 選擇客戶</div>
+      <div class="supplier-search-row">
+        <i class="ti ti-search"></i>
+        <input type="search" id="procCustomerSearch" placeholder="搜尋客戶..." oninput="filterProcCustomerList(this.value)" />
+      </div>
+      <div class="supplier-list" id="procCustomerPickList"></div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div class="toast" id="toast" role="alert" aria-live="polite"></div>
 
@@ -1152,5 +1249,6 @@
 <script src="js/pos.js"></script>
 <script src="js/estimate.js"></script>
 <script src="js/report.js"></script>
+<script src="js/process.js"></script>
 </body>
 </html>
