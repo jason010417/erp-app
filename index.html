@@ -1383,16 +1383,57 @@
 
   <!-- 新增客戶表單 Modal（全域共用） -->
   <div class="modal-overlay" id="newCustomerModal" style="display:none;" onclick="closeNewCustomerModal(event)">
-    <div class="supplier-modal">
+    <div class="supplier-modal" style="max-height:88vh;overflow-y:auto;">
       <div class="supplier-modal-title"><i class="ti ti-user-plus"></i> 新增客戶</div>
       <div class="cust-form">
-        <div class="cust-field"><label>姓名 *</label><input type="text" id="nc-name" placeholder="客戶姓名" /></div>
-        <div class="cust-field"><label>電話</label><input type="tel" id="nc-tel" placeholder="09xx-xxxxxx" /></div>
-        <div class="cust-field"><label>Email</label><input type="email" id="nc-email" placeholder="email@example.com" /></div>
-        <div class="cust-field"><label>地址</label><input type="text" id="nc-addr" placeholder="送貨地址" /></div>
-        <div class="cust-field"><label>備註</label><input type="text" id="nc-note" placeholder="備註" /></div>
+        <!-- 聯絡資訊 -->
+        <div class="cust-form-section">聯絡資訊</div>
+        <div class="cust-field">
+          <label>公司名稱 / 客戶姓名 *</label>
+          <input type="text" id="nc-name" placeholder="公司名稱或客戶姓名" />
+        </div>
+        <div class="cust-field">
+          <label>承辦人</label>
+          <input type="text" id="nc-contact" placeholder="承辦人姓名" />
+        </div>
+        <div class="cust-field">
+          <label>承辦電話</label>
+          <input type="tel" id="nc-tel" placeholder="02-xxxx-xxxx 或 09xx-xxxxxx" />
+        </div>
+        <div class="cust-field">
+          <label>E-mail</label>
+          <input type="email" id="nc-email" placeholder="email@example.com" />
+        </div>
+        <div class="cust-field">
+          <label>傳真號碼</label>
+          <input type="tel" id="nc-fax" placeholder="02-xxxx-xxxx" />
+        </div>
+        <!-- 發票資訊 -->
+        <div class="cust-form-section">發票資訊</div>
+        <div class="cust-field">
+          <label>公司抬頭</label>
+          <input type="text" id="nc-company-title" placeholder="發票抬頭（公司全名）" />
+        </div>
+        <div class="cust-field">
+          <label>統一編號</label>
+          <input type="text" id="nc-tax-id" placeholder="12345678" maxlength="8" />
+        </div>
+        <!-- 收件資訊 -->
+        <div class="cust-form-section">收件資訊</div>
+        <div class="cust-field">
+          <label>收件人</label>
+          <input type="text" id="nc-receiver" placeholder="收件人姓名" />
+        </div>
+        <div class="cust-field">
+          <label>收件電話</label>
+          <input type="tel" id="nc-receiver-tel" placeholder="09xx-xxxxxx" />
+        </div>
+        <div class="cust-field">
+          <label>收件地址</label>
+          <input type="text" id="nc-addr" placeholder="完整收件地址" />
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
         <button class="modal-ok-btn" onclick="saveNewCustomer()"><i class="ti ti-check"></i> 儲存</button>
         <button class="modal-cancel-btn" onclick="closeNewCustomerModal()">取消</button>
       </div>

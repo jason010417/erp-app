@@ -1,4 +1,4 @@
-const CACHE = 'erp-v9';
+const CACHE = 'erp-v10';
 const ASSETS = [
   './', './index.html', './css/style.css',
   './js/data.js', './js/app.js', './js/order.js', './js/pos.js', './js/estimate.js', './js/report.js', './js/process.js', './js/event.js', './manifest.json',
