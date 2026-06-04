@@ -1,8 +1,8 @@
 // ===== ORDER MODULE (進貨單 / 出貨單) =====
 
 const orders = {
-  purchase: { items:[], curItem:null, curBarcode:'', numStr:'0', scanActive:false, animFrame:null },
-  shipment:  { items:[], curItem:null, curBarcode:'', numStr:'0', scanActive:false, animFrame:null },
+  purchase: { items:[], curItem:null, curBarcode:'', numStr:'0', scanActive:false, animFrame:null, submitted:false },
+  shipment:  { items:[], curItem:null, curBarcode:'', numStr:'0', scanActive:false, animFrame:null, submitted:false },
 };
 
 function toggleOrderScan(type) {
@@ -118,6 +118,17 @@ function renderOrderList(type) {
   const totalEl    = document.getElementById(type+'Total');
   const totalQtyEl = document.getElementById(type+'TotalQty');
   const btnEl      = document.getElementById(type+'ConfirmBtn');
+
+  // 出貨單已送出：顯示鎖定提示
+  if(type==='shipment' && o.submitted){
+    listEl.innerHTML = `<div class="order-locked-banner">
+      <i class="ti ti-lock"></i> 出貨單已送出並鎖定
+    </div>`;
+    countEl.textContent = '已送出';
+    if(btnEl){ btnEl.disabled=true; btnEl.style.opacity='0.4'; }
+    return;
+  }
+
   if (!o.items.length) {
     listEl.innerHTML = '<div class="order-empty">還沒有品項，請掃描條碼加入</div>';
     countEl.textContent = '0 項'; totalEl.textContent = '0'; totalQtyEl.textContent = '0';
@@ -165,6 +176,7 @@ function removeOrderItem(type, idx) {
 function clearOrder(type) {
   orders[type].items = [];
   orders[type].curItem = null;
+  orders[type].submitted = false;
   document.getElementById(type+'BarcodeInput').value = '';
   document.getElementById(type+'ItemFound').style.display = 'none';
   document.getElementById(type+'NumSection').style.display = 'none';
@@ -187,6 +199,8 @@ function submitOrder(type) {
   });
   saveInventory(); saveLogs();
   const total = o.items.reduce((s,i) => s+i.qty, 0);
+  // 出貨單送出後標記鎖定
+  if(type === 'shipment') o.submitted = true;
   showToast(type === 'purchase'
     ? `✅ 進貨完成！${o.items.length} 種 共 ${total} 個`
     : `✅ 出貨完成！${o.items.length} 種 共 ${total} 個`);

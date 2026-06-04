@@ -270,6 +270,31 @@ function newEstimate(){
 function viewEstimate(id){
   const e = estimates.find(x=>x.id===id);
   if(!e) return;
+
+  // 已確認（生產中/已完成）→ 直接跳預覽，不開編輯頁
+  if(e.status==='proc' || e.status==='done'){
+    currentEstimate = JSON.parse(JSON.stringify(e));
+    estDiscount = e.discount;
+    previewEstimate();
+    // 預覽頁顯示「主管解鎖」按鈕
+    const actEl = document.getElementById('est-confirm-actions');
+    const c = customers.find(x=>x.id===e.customerId);
+    actEl.style.display = 'block';
+    actEl.innerHTML = `
+      <div class="est-locked-banner">
+        <i class="ti ti-lock"></i>
+        <span>此估價單已確認鎖定（${statusLabel(e.status)}）</span>
+      </div>
+      <button class="redit-btn" onclick="requestAdmin(()=>unlockEstimateEdit('${id}'),'解鎖編輯估價單 ${e.no}')">
+        <i class="ti ti-lock-open"></i> 主管解鎖編輯
+      </button>
+      ${e.status!=='done'?`<button class="redit-btn" style="margin-top:6px;" onclick="cancelEstimate()">
+        <i class="ti ti-x"></i> 取消此估價單
+      </button>`:''}`;
+    return;
+  }
+
+  // 草稿/待確認 → 正常開編輯頁
   currentEstimate = JSON.parse(JSON.stringify(e));
   estDiscount = e.discount;
   document.getElementById('est-edit-title').textContent = e.no;
@@ -286,8 +311,9 @@ function viewEstimate(id){
   if(c){
     document.getElementById('est-customer-name').textContent = c.name;
     let lines=[];
-    if(c.tel)   lines.push(`📞 ${c.tel}`);
-    if(c.email) lines.push(`✉️ ${c.email}`);
+    if(c.contact) lines.push(`👤 ${c.contact}`);
+    if(c.tel)     lines.push(`📞 ${c.tel}`);
+    if(c.email)   lines.push(`✉️ ${c.email}`);
     document.getElementById('est-customer-detail').innerHTML = lines.join('<br>')||'';
     document.getElementById('est-customer-info').style.display = 'block';
   } else {
@@ -296,6 +322,36 @@ function viewEstimate(id){
   }
   renderEstItems();
   showPage('estimate-edit');
+}
+
+// 主管解鎖後開放編輯
+function unlockEstimateEdit(id){
+  const e = estimates.find(x=>x.id===id);
+  if(!e) return;
+  currentEstimate = JSON.parse(JSON.stringify(e));
+  estDiscount = e.discount;
+  document.getElementById('est-edit-title').textContent = '✏️ ' + e.no + '（已解鎖）';
+  document.getElementById('est-no').textContent   = e.no;
+  document.getElementById('est-date').textContent = fmtDate(e.date);
+  document.getElementById('est-expire').value     = e.expire||'';
+  document.getElementById('est-discount-label').textContent = e.discount + '%';
+  estDelivery = e.delivery || 'pickup';
+  ['pickup','delivery','personal'].forEach(m=>{
+    document.getElementById('dm-'+m)?.classList.toggle('active', m===estDelivery);
+  });
+  document.getElementById('est-remark').value = e.remark||'';
+  const c = customers.find(x=>x.id===e.customerId);
+  if(c){
+    document.getElementById('est-customer-name').textContent = c.name;
+    let lines=[];
+    if(c.contact) lines.push(`👤 ${c.contact}`);
+    if(c.tel)     lines.push(`📞 ${c.tel}`);
+    document.getElementById('est-customer-detail').innerHTML = lines.join('<br>')||'';
+    document.getElementById('est-customer-info').style.display = 'block';
+  }
+  renderEstItems();
+  showPage('estimate-edit');
+  showToast('🔓 已解鎖，可以修改估價單');
 }
 
 // 品項搜尋
