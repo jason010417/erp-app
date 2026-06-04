@@ -1,3 +1,14 @@
+
+// ── 送貨方式 ──
+let estDelivery = 'pickup';
+const DELIVERY_LABELS = { pickup:'自取', delivery:'宅配', personal:'親送' };
+function selectDelivery(method){
+  estDelivery = method;
+  ['pickup','delivery','personal'].forEach(m=>{
+    document.getElementById('dm-'+m)?.classList.toggle('active', m===method);
+  });
+}
+
 // ===== 估價單 + 客戶資料系統 =====
 
 // ── 資料儲存 ──
@@ -158,6 +169,7 @@ function renderCustomerList(q){
 function showCustomerDetail(id){
   const c = customers.find(x=>x.id===id);
   if(!c) return;
+  _detailCustomerId = id;
   document.getElementById('cust-detail-name').textContent = c.name;
   document.getElementById('cust-detail-card').innerHTML = `
     <div class="cust-info-block">
@@ -197,9 +209,9 @@ function showCustomerDetail(id){
 }
 
 let _editCustomerId = null;
+let _detailCustomerId = null;  // 目前詳細頁的客戶id
 function editCurrentCustomer(){
-  const name = document.getElementById('cust-detail-name').textContent;
-  const c = customers.find(x=>x.name===name);
+  const c = customers.find(x=>x.id===_detailCustomerId);
   if(!c) return;
   _editCustomerId = c.id;
   const setVal = (id, val) => { const el=document.getElementById(id); if(el) el.value=val||''; };
@@ -240,6 +252,7 @@ function newEstimate(){
     status: 'draft'
   };
   estDiscount = 0;
+  estDelivery = 'pickup';
   document.getElementById('est-edit-title').textContent = '新增估價單';
   document.getElementById('est-no').textContent   = currentEstimate.no;
   document.getElementById('est-date').textContent = fmtDate(currentEstimate.date);
@@ -264,6 +277,10 @@ function viewEstimate(id){
   document.getElementById('est-date').textContent = fmtDate(e.date);
   document.getElementById('est-expire').value     = e.expire||'';
   document.getElementById('est-discount-label').textContent = e.discount + '%';
+  estDelivery = e.delivery || 'pickup';
+  ['pickup','delivery','personal'].forEach(m=>{
+    document.getElementById('dm-'+m)?.classList.toggle('active', m===estDelivery);
+  });
   document.getElementById('est-remark').value     = e.remark||'';
   const c = customers.find(x=>x.id===e.customerId);
   if(c){
@@ -377,6 +394,7 @@ function _collectEstimate(){
   currentEstimate.expire   = document.getElementById('est-expire').value;
   currentEstimate.remark   = document.getElementById('est-remark').value.trim();
   currentEstimate.discount = estDiscount;
+  currentEstimate.delivery = estDelivery;
   currentEstimate.subtotal = sub;
   currentEstimate.total    = total;
   return total;
@@ -474,6 +492,7 @@ function previewEstimate(){
         </div>
         <div class="est-pdf-meta-col right">
           <div class="est-pdf-meta-row"><span>單號</span><strong>${currentEstimate.no}</strong></div>
+          <div class="est-pdf-meta-row"><span>送貨方式</span><span>${DELIVERY_LABELS[currentEstimate.delivery||'pickup']}</span></div>
           <div class="est-pdf-meta-row"><span>日期</span><span>${fmtDate(currentEstimate.date)}</span></div>
           <div class="est-pdf-meta-row"><span>有效期限</span><span>${fmtDate(currentEstimate.expire)}</span></div>
         </div>

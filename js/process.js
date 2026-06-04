@@ -209,6 +209,7 @@ function estimateToProcess(estId){
     createdAt: new Date().toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),
     deadline:'', sourceRef: e.no, customerId: e.customerId,
     items: e.items.map(i=>({id:i.id,name:i.name,emoji:i.emoji,qty:i.qty})),
+    delivery: e.delivery||'pickup',
     remark:'', status:'prepare', statusLog:[]
   };
   resetProcEditForm();
@@ -327,15 +328,17 @@ function renderProcDetail(){
   // ── 狀態更新按鈕 ──
   const actEl = document.getElementById('proc-status-actions');
   const next  = nextStep(o.status);
-  if(next && o.status!=='shipped'){
+  if(o.status === 'shipped'){
+    actEl.innerHTML = `
+      <button class="confirm-btn" style="background:#6B4FBB;margin-bottom:8px;" onclick="openShippingNote('${o.id}')">
+        <i class="ti ti-file-text"></i> 列印出貨單
+      </button>
+      <div style="text-align:center;padding:8px;color:var(--text3);font-size:13px;">✅ 此訂單已完成出貨</div>`;
+  } else if(next){
     actEl.innerHTML = `
       <button class="confirm-btn" style="background:${next.color};margin-bottom:8px;" onclick="advanceProcStatus()">
         <i class="ti ${next.icon}"></i> 推進到「${next.label}」
-      </button>
-      ${o.status==='done'?`
-      <button class="confirm-btn" style="background:#6B4FBB;" onclick="advanceProcStatus()">
-        <i class="ti ti-truck"></i> 標記出貨完成
-      </button>`:''}`;
+      </button>`;
   } else {
     actEl.innerHTML = `<div style="text-align:center;padding:12px;color:var(--text3);font-size:14px;">✅ 此訂單已完成出貨</div>`;
   }
@@ -375,4 +378,134 @@ function advanceProcStatus(){
   _upsertProcOrder();
   renderProcDetail();
   showToast(`✅ 狀態已更新為「${next.label}」`);
+  // 出貨後提示開出貨單
+  if(next.key==='shipped'){
+    setTimeout(()=>{
+      const actEl = document.getElementById('proc-status-actions');
+      actEl.innerHTML = `
+        <button class="confirm-btn" style="background:#6B4FBB;margin-bottom:8px;" onclick="openShippingNote('${currentProcOrder.id}')">
+          <i class="ti ti-file-text"></i> 列印出貨單
+        </button>
+        <div style="text-align:center;padding:8px;color:var(--text3);font-size:13px;">✅ 此訂單已完成出貨</div>`;
+    }, 300);
+  }
+}
+
+// ===== 出貨單列印 =====
+let shippingNoteOrder = null;
+let snMethod = 'pickup';
+
+function openShippingNote(orderId){
+  const o = productionOrders.find(x=>x.id===orderId) || currentProcOrder;
+  if(!o) return;
+  shippingNoteOrder = o;
+  snMethod = o.delivery || 'pickup';
+
+  // 預設寄貨日期為今天
+  document.getElementById('sn-ship-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('sn-logistics').value  = '';
+  document.getElementById('sn-tracking').value   = '';
+
+  // 套用估價單的送貨方式
+  selectShipping(snMethod);
+  renderShippingPreview();
+  showPage('shipping-note');
+}
+
+function selectShipping(method){
+  snMethod = method;
+  ['pickup','delivery','personal'].forEach(m=>{
+    document.getElementById('sn-'+m)?.classList.toggle('active', m===method);
+  });
+  // 宅配才顯示物流欄位
+  const showLogistics = method === 'delivery';
+  document.getElementById('sn-logistics-section').style.display = showLogistics ? 'block' : 'none';
+  document.getElementById('sn-tracking-section').style.display  = showLogistics ? 'block' : 'none';
+  renderShippingPreview();
+}
+
+function renderShippingPreview(){
+  const o  = shippingNoteOrder;
+  if(!o) return;
+  const c  = typeof customers!=='undefined' ? customers.find(x=>x.id===o.customerId) : null;
+  const shipDate  = document.getElementById('sn-ship-date').value;
+  const logistics = document.getElementById('sn-logistics').value;
+  const tracking  = document.getElementById('sn-tracking').value;
+  const methodLabels = { pickup:'自取', delivery:'宅配', personal:'親送' };
+
+  const itemsHTML = (o.items||[]).map(item=>`
+    <tr>
+      <td>${item.emoji} ${item.name}</td>
+      <td style="text-align:center;">${item.qty}</td>
+      <td style="text-align:center;">個</td>
+    </tr>`).join('');
+
+  document.getElementById('shipping-preview').innerHTML = `
+    <div class="shipping-doc" id="shipping-doc-body">
+      <div class="shipping-doc-header">
+        <div class="shipping-doc-title">出　貨　單</div>
+        <div class="shipping-doc-company">工廠直售</div>
+      </div>
+      <div class="shipping-doc-meta">
+        <div class="shipping-meta-col">
+          <div class="shipping-meta-title">收件人資訊</div>
+          <div class="shipping-meta-row"><span>公司／姓名</span><strong>${c?c.name:'—'}</strong></div>
+          ${c&&c.contact?`<div class="shipping-meta-row"><span>承辦人</span><span>${c.contact}</span></div>`:''}
+          ${c&&c.receiver?`<div class="shipping-meta-row"><span>收件人</span><span>${c.receiver}</span></div>`:''}
+          ${c&&c.receiverTel?`<div class="shipping-meta-row"><span>收件電話</span><span>${c.receiverTel}</span></div>`:''}
+          ${c&&c.addr?`<div class="shipping-meta-row"><span>收件地址</span><span>${c.addr}</span></div>`:''}
+        </div>
+        <div class="shipping-meta-col">
+          <div class="shipping-meta-title">出貨資訊</div>
+          <div class="shipping-meta-row"><span>訂單單號</span><strong>${o.no}</strong></div>
+          ${o.sourceRef?`<div class="shipping-meta-row"><span>來源估價單</span><span>${o.sourceRef}</span></div>`:''}
+          <div class="shipping-meta-row"><span>送貨方式</span><strong>${methodLabels[snMethod]}</strong></div>
+          <div class="shipping-meta-row"><span>寄貨日期</span><span>${shipDate?fmtDate(shipDate):'—'}</span></div>
+          ${snMethod==='delivery'&&logistics?`<div class="shipping-meta-row"><span>物流公司</span><span>${logistics}</span></div>`:''}
+          ${snMethod==='delivery'&&tracking?`<div class="shipping-meta-row"><span>物流單號</span><strong>${tracking}</strong></div>`:''}
+        </div>
+      </div>
+      <table class="shipping-table">
+        <thead><tr><th>品項</th><th>數量</th><th>單位</th></tr></thead>
+        <tbody>${itemsHTML}</tbody>
+      </table>
+      <div class="shipping-doc-footer">
+        <div class="shipping-sign-row">
+          <div class="shipping-sign-box">出貨人員簽名：_______________</div>
+          <div class="shipping-sign-box">收件人簽名：_______________</div>
+        </div>
+        <div class="shipping-note-text">如有問題請聯繫我們，感謝您的支持！</div>
+      </div>
+    </div>`;
+}
+
+function printShippingNote(){
+  renderShippingPreview();
+  const content = document.getElementById('shipping-doc-body').innerHTML;
+  const win = window.open('','_blank','width=800,height=900');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>出貨單</title>
+  <style>
+    *{box-sizing:border-box;}
+    body{font-family:-apple-system,'Noto Sans TC',sans-serif;padding:24px;color:#1a1a18;max-width:720px;margin:0 auto;}
+    .shipping-doc-header{text-align:center;border-bottom:3px solid #6B4FBB;padding-bottom:12px;margin-bottom:16px;}
+    .shipping-doc-title{font-size:28px;font-weight:700;color:#6B4FBB;letter-spacing:4px;}
+    .shipping-doc-company{font-size:14px;color:#6B6B68;margin-top:4px;}
+    .shipping-doc-meta{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+    .shipping-meta-col{background:#F5F5F3;padding:12px;border-radius:8px;}
+    .shipping-meta-title{font-size:12px;font-weight:700;color:#6B4FBB;margin-bottom:8px;letter-spacing:0.5px;}
+    .shipping-meta-row{display:flex;gap:8px;font-size:13px;padding:3px 0;}
+    .shipping-meta-row span:first-child{color:#6B6B68;min-width:60px;flex-shrink:0;}
+    .shipping-meta-row strong{color:#1a1a18;}
+    .shipping-table{width:100%;border-collapse:collapse;margin-bottom:20px;}
+    .shipping-table th{background:#6B4FBB;color:white;padding:10px;font-size:13px;text-align:left;}
+    .shipping-table td{padding:10px;font-size:13px;border-bottom:1px solid #eee;}
+    .shipping-doc-footer{border-top:1px solid #ddd;padding-top:16px;}
+    .shipping-sign-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:12px;}
+    .shipping-sign-box{font-size:13px;color:#6B6B68;border-bottom:1px solid #ddd;padding-bottom:24px;}
+    .shipping-note-text{font-size:12px;color:#9B9B98;text-align:center;}
+    @media print{body{padding:0;}}
+  </style></head><body>${content}</body></html>`);
+  win.document.close();
+  setTimeout(()=>{ win.focus(); win.print(); },400);
 }
