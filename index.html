@@ -1647,6 +1647,22 @@
     </div>
   </div>
 
+  <!-- 每日帶貨設定 Modal -->
+  <div class="modal-overlay" id="dayQtyModal" style="display:none;" onclick="closeDayQtyModal(event)">
+    <div class="supplier-modal" style="max-height:88vh;overflow-y:auto;">
+      <div class="supplier-modal-title"><i class="ti ti-package"></i> <span id="day-qty-title">帶貨設定</span></div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">
+        <i class="ti ti-calendar"></i> <span id="day-qty-date"></span>
+      </div>
+      <div class="supplier-label" style="margin-bottom:8px;">設定今天帶出去的每樣商品數量：</div>
+      <div id="day-qty-list"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
+        <button class="modal-ok-btn" onclick="saveDayQty()"><i class="ti ti-check"></i> 儲存</button>
+        <button class="modal-cancel-btn" onclick="closeDayQtyModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 主管驗證 Modal -->
   <div class="modal-overlay" id="adminAuthModal" style="display:none;">
     <div class="supplier-modal" style="max-width:320px;">

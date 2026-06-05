@@ -701,3 +701,36 @@ main { flex: 1; overflow-y: auto; padding: var(--header-h) 0 calc(var(--nav-h) +
 .finance-bar-col { display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; min-width:8px; }
 .finance-bar { width:100%; border-radius:3px 3px 0 0; min-height:4px; transition:height 0.3s; }
 .finance-bar-label { font-size:9px; color:var(--text3); }
+
+/* ===== 外展快捷按鈕剩餘數量 ===== */
+.event-quick-btn.sold-out { opacity:0.45; cursor:not-allowed; }
+.eq-remain { font-size:11px; font-weight:700; margin-top:2px; color:var(--green-dark); }
+.eq-remain.eq-low  { color:#BA7517; }
+.eq-remain.eq-sold { color:#E24B4A; }
+
+/* ===== 帶貨對帳表 ===== */
+.event-acct-table { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:12px; }
+.event-acct-header { display:grid; grid-template-columns:1fr 52px 52px 64px; padding:8px 12px; background:var(--bg); font-size:12px; font-weight:600; color:var(--text2); border-bottom:1px solid var(--border); }
+.event-acct-row { display:grid; grid-template-columns:1fr 52px 52px 64px; padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px; align-items:center; }
+.event-acct-row:last-child { border:none; }
+.event-acct-row span:not(:first-child) { text-align:center; font-weight:600; }
+.event-acct-row.acct-sold { background:var(--green-light); }
+.event-acct-row.acct-sold span:last-child { color:var(--green-dark); }
+.event-acct-row.acct-partial span:last-child { color:#BA7517; font-weight:700; }
+.event-acct-footer { display:grid; grid-template-columns:1fr 52px 52px 64px; padding:10px 12px; background:var(--bg); font-size:13px; font-weight:700; color:var(--text); border-top:2px solid var(--border); }
+.event-acct-footer span:not(:first-child) { text-align:center; }
+
+/* ===== 每日外展卡片（新版） ===== */
+.event-days-list { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+.event-day-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); padding:12px 14px; }
+.event-day-card.today { background:#EDE9F8; border-color:#C4B5F4; }
+.event-day-card .event-day-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.event-day-card .event-day-label { font-size:14px; font-weight:700; color:var(--text); }
+.event-day-card.today .event-day-label { color:#3D2780; }
+.event-day-card .event-day-stats { font-size:12px; color:var(--text2); display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+.event-day-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.event-day-setqty-btn { display:flex; align-items:center; justify-content:center; gap:6px; padding:9px; background:var(--bg); color:var(--text2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; font-weight:600; cursor:pointer; }
+.event-day-setqty-btn .ti { font-size:16px; }
+.event-day-open-btn { display:flex; align-items:center; justify-content:center; gap:6px; padding:9px; background:#6B4FBB; color:white; border:none; border-radius:var(--radius-sm); font-size:13px; font-weight:600; cursor:pointer; }
+.event-day-open-btn.disabled { background:var(--text3); cursor:not-allowed; opacity:0.6; }
+.event-day-open-btn .ti { font-size:16px; }
