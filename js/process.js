@@ -422,7 +422,8 @@ function openShippingNote(orderId){
   snMethod = o.delivery || 'pickup';
 
   // 預設寄貨日期為今天
-  document.getElementById('sn-ship-date').value = new Date().toISOString().slice(0,10);
+  const d = new Date();
+  document.getElementById('sn-ship-date').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   document.getElementById('sn-logistics').value  = '';
   document.getElementById('sn-tracking').value   = '';
 

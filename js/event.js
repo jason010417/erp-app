@@ -18,7 +18,13 @@ function genEventNo(){
   const same = events.filter(e=>e.no.startsWith(prefix)).length;
   return prefix + '-' + String(same+1).padStart(3,'0');
 }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+function todayStr(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 function eventStatus(ev){
   const t = todayStr();
   if(t < ev.startDate) return 'upcoming';

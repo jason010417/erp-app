@@ -31,8 +31,14 @@ function fmtDate(dateStr){
   if(!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString('zh-TW',{year:'numeric',month:'numeric',day:'numeric'});
 }
-function today(){ return new Date().toISOString().slice(0,10); }
-function addDays(d,n){ const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt.toISOString().slice(0,10); }
+function today(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function addDays(d,n){
+  const dt = new Date(d); dt.setDate(dt.getDate()+n);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
 
 // ══════════════════════════════
 // 客戶管理

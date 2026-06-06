@@ -410,11 +410,11 @@ function comingSoon(name) {
 }
 
 function confirmResetInventory() {
-  if (confirm('確定要清除所有庫存數量嗎？此操作無法復原！')) {
+  if (confirm('確定要重設所有庫存數量嗎？\n將會重新載入 data.js 的初始數量，此操作無法復原！')) {
     inventory = {};
-    ALL_ITEMS.forEach(item => { inventory[item.id] = 0; });
+    ALL_ITEMS.forEach(item => { inventory[item.id] = item.qty; });
     saveInventory();
     renderHome(); renderFinished(); renderMaterials();
-    showToast('✅ 庫存已重設為 0');
+    showToast('✅ 庫存已重設（套用 data.js 初始數量）');
   }
 }

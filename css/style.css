@@ -734,3 +734,38 @@ main { flex: 1; overflow-y: auto; padding: var(--header-h) 0 calc(var(--nav-h) +
 .event-day-open-btn { display:flex; align-items:center; justify-content:center; gap:6px; padding:9px; background:#6B4FBB; color:white; border:none; border-radius:var(--radius-sm); font-size:13px; font-weight:600; cursor:pointer; }
 .event-day-open-btn.disabled { background:var(--text3); cursor:not-allowed; opacity:0.6; }
 .event-day-open-btn .ti { font-size:16px; }
+
+/* ===== 智慧搜尋下拉 ===== */
+.ss-dropdown {
+  position: absolute;
+  z-index: 9999;
+  background: var(--surface);
+  border: 1.5px solid var(--green-mid);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  overflow: hidden;
+  display: none;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.ss-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.ss-item:last-child { border: none; }
+.ss-item:hover, .ss-item-active { background: var(--green-light); }
+.ss-emoji { font-size: 24px; flex-shrink: 0; }
+.ss-info { flex: 1; min-width: 0; }
+.ss-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-sub  { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.ss-mark { background: #FFE680; color: var(--text); border-radius: 2px; padding: 0 1px; font-style: normal; }
+.ss-stock { font-size: 18px; font-weight: 700; flex-shrink: 0; text-align: right; }
+.ss-unit  { font-size: 10px; color: var(--text3); margin-left: 1px; }
+.ss-qty-ok    { color: var(--green); }
+.ss-qty-low   { color: var(--amber); }
+.ss-qty-empty { color: var(--red); }
