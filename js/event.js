@@ -272,6 +272,9 @@ function viewEvent(id){
       ${ev.note?`<div class="cust-info-row"><i class="ti ti-notes"></i>${ev.note}</div>`:''}
     </div>`;
 
+  // 離線模式區塊（event_offline.js 提供）
+  if(typeof renderOfflineSection === 'function') renderOfflineSection(ev);
+
   // 開始外展按鈕
   renderEventStartSection(ev);
 

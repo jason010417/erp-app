@@ -325,11 +325,5 @@ function submitEventUpload(){
   });
 }
 
-// 在外展詳細頁渲染時加入離線區塊
-const _origViewEvent = window.viewEvent;
-window.viewEvent = function(id){
-  if(typeof _origViewEvent==='function') _origViewEvent(id);
-  // 渲染完後加入離線區塊
-  const ev = events.find(e=>e.id===id);
-  if(ev) setTimeout(()=>renderOfflineSection(ev), 50);
-};
+// ── 不需要攔截，直接在 event.js 的 viewEvent 呼叫 renderOfflineSection ──
+// renderOfflineSection 已在 viewEvent 內透過 showPage 後觸發

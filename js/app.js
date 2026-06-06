@@ -425,7 +425,7 @@ const _origShowPage = window.showPage;
 window.showPage = function(name){
   // 需要主管以上的頁面
   const managerPages = ['admin','admin-products','admin-bom','admin-bom-edit',
-    'admin-suppliers','admin-system','finance','unpaid'];
+    'admin-suppliers','admin-system','finance','unpaid','event-review'];
   // 需要管理員的頁面
   const adminPages = [];
 
