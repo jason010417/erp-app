@@ -200,7 +200,6 @@ function renderEvItems(){
         <span class="qty-num ${isTaking?'':'qty-zero'}">${item.takeQty}</span>
         <button class="qty-edit-btn plus"  onclick="evChangeTakeQty('${item.id}',1)">＋</button>
       </div>
-      <button class="order-del" onclick="evRemoveItem('${item.id}')"><i class="ti ti-x"></i></button>
     </div>`;
   }).join('');
 }
@@ -302,45 +301,100 @@ function renderEventStartSection(ev){
     return;
   }
 
-  let dayCards = '';
-  for(let i=0;i<days;i++){
-    const d = new Date(ev.startDate);
-    d.setDate(d.getDate()+i);
-    const ds       = d.toISOString().slice(0,10);
-    const isToday  = ds===t;
-    const dayNum   = i+1;
-    const txCnt    = calcDayTxCount(ev.id, ds);
-    const daySales = calcDaySales(ev.id, ds);
-    const dayItems = ev.dayItems?.[ds] || [];
-    const hasSetQty= dayItems.length > 0;
-    const totalTake= dayItems.reduce((s,i)=>s+(i.takeQty||0), 0);
-    const totalSold= dayItems.reduce((s,i)=>s+calcDaySoldQty(ev.id,i.id,ds), 0);
+  // 計算整個活動的帶出總量與累計銷售
+  const totalTake = (ev.items||[]).reduce((s,i)=>s+(i.takeQty||0),0);
+  const totalSold = (ev.items||[]).reduce((s,i)=>s+calcItemSoldQty(ev.id,i.id),0);
+  const remaining = Math.max(0, totalTake - totalSold);
 
-    dayCards += `
-      <div class="event-day-card ${isToday?'today':''}">
-        <div class="event-day-top">
-          <span class="event-day-label">第 ${dayNum} 天 ${isToday?'（今天）':''}</span>
-          <span style="font-size:11px;">${fmtDate(ds)}</span>
-        </div>
-        <div class="event-day-stats">
-          <span>💰 $${daySales.toLocaleString()}</span>
-          <span>🧾 ${txCnt} 筆</span>
-          ${hasSetQty?`<span>📦 帶 ${totalTake} / 賣 ${totalSold}</span>`:'<span style="color:#BA7517;font-weight:600;">⚠️ 未設帶貨</span>'}
-        </div>
-        <div class="event-day-actions">
-          <button class="event-day-setqty-btn" onclick="openDayQtyModal('${ev.id}','${ds}',${dayNum})">
-            <i class="ti ti-package"></i> ${hasSetQty?'修改帶貨':'設定帶貨'}
-          </button>
-          <button class="event-day-open-btn ${!hasSetQty?'disabled':''}"
-            onclick="${hasSetQty?`startEventPOS('${ev.id}',${dayNum},'${ds}')`:`showToast('⚠️ 請先設定今日帶貨數量')`}">
-            <i class="ti ti-cash-register"></i> 開啟 POS
-          </button>
-        </div>
-      </div>`;
-  }
-  el.innerHTML = `<div class="section-title" style="margin-top:14px;">
-    <i class="ti ti-cash-register"></i> 開啟外展 POS</div>
-    <div class="event-days-list">${dayCards}</div>`;
+  // 今天的銷售
+  const todaySales = calcDaySales(ev.id, t);
+  const todayTx    = calcDayTxCount(ev.id, t);
+
+  const noItems = !(ev.items||[]).some(i=>(i.takeQty||0)>0);
+
+  el.innerHTML = `
+    <div class="section-title" style="margin-top:14px;">
+      <i class="ti ti-cash-register"></i> 開啟外展 POS
+    </div>
+    ${noItems?`<div class="panel-hint" style="background:#FAECE7;color:#712B13;">
+      ⚠️ 尚未設定帶貨數量，請先編輯活動設定帶出數量
+    </div>`:''}
+    <div class="event-summary-card">
+      <div class="event-sum-row">
+        <span>📦 總帶出</span><strong>${totalTake} 個</strong>
+      </div>
+      <div class="event-sum-row">
+        <span>🛒 已賣出</span><strong>${totalSold} 個</strong>
+      </div>
+      <div class="event-sum-row">
+        <span>📋 剩餘</span>
+        <strong style="color:${remaining<=5&&totalTake>0?'#E24B4A':'#1D9E75'}">${remaining} 個</strong>
+      </div>
+      <div class="event-sum-row">
+        <span>💰 今日銷售</span><strong>$${todaySales.toLocaleString()} ／ ${todayTx} 筆</strong>
+      </div>
+    </div>
+    <div class="event-day-actions" style="margin-top:10px;">
+      <button class="event-day-setqty-btn" onclick="openAddStockModal('${ev.id}')">
+        <i class="ti ti-package-import"></i> 補貨
+      </button>
+      <button class="event-day-open-btn ${noItems?'disabled':''}"
+        onclick="${noItems?`showToast('⚠️ 請先設定帶貨數量')`:`startEventPOS('${ev.id}')`}">
+        <i class="ti ti-cash-register"></i> 開啟 POS
+      </button>
+    </div>`;
+}
+
+// ── 補貨 Modal ──
+function openAddStockModal(eventId){
+  const ev = events.find(e=>e.id===eventId);
+  if(!ev) return;
+  _dayQtyEventId = eventId;
+  _dayQtyItems = (ev.items||[]).map(item=>({
+    id:item.id, name:item.name, emoji:item.emoji, price:item.price||0,
+    addQty:0,  // 本次補貨數量
+    takeQty: item.takeQty||0,
+    soldQty: calcItemSoldQty(eventId, item.id),
+  }));
+  document.getElementById('day-qty-title').textContent = '補貨';
+  document.getElementById('day-qty-date').textContent  = '輸入本次補貨數量';
+  renderAddStockList();
+  document.getElementById('dayQtyModal').style.display = 'flex';
+}
+function renderAddStockList(){
+  document.getElementById('day-qty-list').innerHTML = _dayQtyItems.map((item,idx)=>{
+    const remaining = Math.max(0,(item.takeQty||0)-(item.soldQty||0));
+    return `<div class="order-row">
+      <div class="order-emoji">${item.emoji}</div>
+      <div class="order-info">
+        <div class="order-name">${item.name}</div>
+        <div class="order-id">帶出${item.takeQty} 賣出${item.soldQty} 剩${remaining}</div>
+      </div>
+      <div class="order-qty-ctrl">
+        <button class="qty-edit-btn minus" onclick="addStockChange(${idx},-1)">−</button>
+        <span class="qty-num" style="color:${item.addQty>0?'#1D9E75':'var(--text3)'}">${item.addQty}</span>
+        <button class="qty-edit-btn plus"  onclick="addStockChange(${idx},1)">＋</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function addStockChange(idx, delta){
+  _dayQtyItems[idx].addQty = Math.max(0, (_dayQtyItems[idx].addQty||0)+delta);
+  renderAddStockList();
+}
+function saveDayQty(){
+  // 判斷是補貨還是每日設定（舊版）
+  const ev = events.find(e=>e.id===_dayQtyEventId);
+  if(!ev) return;
+  // 把補貨數量加到 takeQty
+  _dayQtyItems.forEach(item=>{
+    const evItem = (ev.items||[]).find(i=>i.id===item.id);
+    if(evItem && item.addQty>0) evItem.takeQty = (evItem.takeQty||0) + item.addQty;
+  });
+  saveEvents();
+  document.getElementById('dayQtyModal').style.display = 'none';
+  showToast('✅ 補貨已記錄');
+  viewEvent(_dayQtyEventId);
 }
 
 // ── 每日帶貨設定 Modal ──
@@ -403,17 +457,17 @@ function calcDaySoldQty(eventId, itemId, dateStr){
 }
 
 // 開啟外展POS
-function startEventPOS(eventId, dayNum, dateStr){
+function startEventPOS(eventId){
   const ev = events.find(e=>e.id===eventId);
   if(!ev) return;
   currentEventId   = eventId;
-  currentEventDay  = dayNum;
-  currentEventDate = dateStr;
+  currentEventDay  = dayIndex(ev, todayStr());
+  currentEventDate = todayStr();
   clearPOS();
   document.getElementById('event-pos-banner').style.display = 'block';
   document.getElementById('event-banner-name').textContent  = ev.name;
   document.getElementById('event-banner-day').textContent   =
-    totalDays(ev)>1 ? `第 ${dayNum} 天` : '';
+    totalDays(ev)>1 ? `第 ${currentEventDay} 天` : '';
   document.getElementById('pos-title').innerHTML =
     `<i class="ti ti-cash-register" style="color:#BA7517;"></i> ${ev.name}`;
   renderEventQuickGrid(ev);
@@ -426,28 +480,30 @@ function renderEventQuickGrid(ev){
     if(!cur) return;
     ev = cur;
   }
-  // 用當天的 dayItems，若無則退回活動商品清單
-  const dayItems = (currentEventDate && ev.dayItems?.[currentEventDate])
-    ? ev.dayItems[currentEventDate]
-    : ev.items || [];
-
+  // 只顯示 takeQty > 0 的商品，用整個活動累計計算剩餘
+  const activeItems = (ev.items||[]).filter(i=>(i.takeQty||0)>0);
   const grid = document.getElementById('eventQuickGrid');
-  grid.innerHTML = dayItems.map(item=>{
+
+  if(!activeItems.length){
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:12px;color:var(--text3);font-size:13px;">
+      尚未設定帶貨商品</div>`;
+    return;
+  }
+
+  grid.innerHTML = activeItems.map(item=>{
     const takeQty  = item.takeQty || 0;
-    const soldQty  = currentEventDate
-      ? calcDaySoldQty(ev.id, item.id, currentEventDate)
-      : calcItemSoldQty(ev.id, item.id);
+    const soldQty  = calcItemSoldQty(ev.id, item.id);  // 整個活動累計
     const remaining= Math.max(0, takeQty - soldQty);
-    const soldOut  = remaining <= 0 && takeQty > 0;
-    const lowStock = !soldOut && remaining > 0 && remaining <= 3;
+    const soldOut  = remaining <= 0;
+    const lowStock = !soldOut && remaining <= 3;
     return `
       <button class="event-quick-btn ${soldOut?'sold-out':''}"
-        onclick="${soldOut?`showToast('⚠️ 今日此商品已售完！')`:`addPOSItemById('${item.id}')`}">
+        onclick="${soldOut?`showToast('⚠️ 此商品已售完！')`:`addPOSItemById('${item.id}')`}">
         <span class="eq-emoji">${item.emoji}</span>
         <span class="eq-name">${item.name.length>8?item.name.slice(0,8)+'…':item.name}</span>
         <span class="eq-price">$${item.price}</span>
         <span class="eq-remain ${soldOut?'eq-sold':lowStock?'eq-low':''}">
-          ${soldOut?'今日售完':remaining+'/'+takeQty}
+          ${soldOut?'售完':remaining+'/'+takeQty}
         </span>
       </button>`;
   }).join('');
@@ -479,8 +535,10 @@ window.confirmPOS = function(){
       logs[i].eventDay = currentEventDay;
     }
     saveLogs();
-    // 更新快捷按鈕剩餘數量
-    renderEventQuickGrid();
+    // 收款後重新顯示外展 banner 和快捷商品（修復消失問題）
+    const ev = events.find(e=>e.id===currentEventId);
+    document.getElementById('event-pos-banner').style.display = 'block';
+    renderEventQuickGrid(ev);
   }
 };
 
@@ -560,22 +618,16 @@ function renderEventReport(ev){
 
 function renderEventRanking(ev){
   const el     = document.getElementById('event-ranking-section');
-  const days   = totalDays(ev);
   const evLogs = getEventLogs(ev.id);
 
-  // ── 按天對帳表 ──
+  // ── 整個活動對帳表（不分天）──
+  const activeItems = (ev.items||[]).filter(i=>(i.takeQty||0)>0);
   let acctHTML = '';
-  for(let i=0;i<days;i++){
-    const d = new Date(ev.startDate);
-    d.setDate(d.getDate()+i);
-    const ds       = d.toISOString().slice(0,10);
-    const dayItems = ev.dayItems?.[ds] || [];
-    if(!dayItems.length) continue;
-
+  if(activeItems.length){
     let grandTake=0, grandSold=0;
-    let rows = dayItems.map(item=>{
+    const rows = activeItems.map(item=>{
       const takeQty = item.takeQty||0;
-      const soldQty = calcDaySoldQty(ev.id, item.id, ds);
+      const soldQty = calcItemSoldQty(ev.id, item.id);
       const remain  = Math.max(0, takeQty-soldQty);
       grandTake += takeQty; grandSold += soldQty;
       const cls = remain===0&&takeQty>0?'acct-sold':soldQty>0?'acct-partial':'acct-none';
@@ -585,10 +637,9 @@ function renderEventRanking(ev){
         <span>${remain===0&&takeQty>0?'✅ 售完':remain}</span>
       </div>`;
     }).join('');
-
-    acctHTML += `
+    acctHTML = `
       <div class="section-title" style="margin-top:14px;font-size:14px;">
-        <i class="ti ti-clipboard-check"></i> 第 ${i+1} 天 ${fmtDate(ds)} 對帳
+        <i class="ti ti-clipboard-check"></i> 帶貨對帳表（整個活動）
       </div>
       <div class="event-acct-table">
         <div class="event-acct-header"><span>商品</span><span>帶出</span><span>賣出</span><span>剩餘</span></div>
@@ -597,8 +648,9 @@ function renderEventRanking(ev){
           <span>合計</span><span>${grandTake}</span><span>${grandSold}</span><span>${grandTake-grandSold}</span>
         </div>
       </div>`;
+  } else {
+    acctHTML = `<div class="report-empty">尚未設定帶貨數量</div>`;
   }
-  if(!acctHTML) acctHTML = `<div class="report-empty">尚未設定各天帶貨數量</div>`;
 
   // ── 整體商品排行 ──
   let rankHTML = '';

@@ -153,21 +153,49 @@ function saveProduct(){
 // ── BOM 管理 ──
 let bomEditId = null;
 let bomEditItems = [];
+
+// BOM 額外存在 localStorage，這樣修改後重整不會消失
+function loadBomFromStorage(){
+  const saved = JSON.parse(localStorage.getItem('erp_bom') || '{}');
+  Object.keys(saved).forEach(id => { BOM[id] = saved[id]; });
+}
+function saveBomToStorage(){
+  localStorage.setItem('erp_bom', JSON.stringify(BOM));
+  // 同步到 Firebase
+  if(typeof _db !== 'undefined' && _db){
+    _db.ref('erp/bom').set(BOM).catch(()=>{});
+  }
+}
+
 function renderBomList(q){
   const el = document.getElementById('bom-list');
-  const items = (q?FINISHED.filter(i=>i.name.includes(q)||i.id.includes(q)):FINISHED);
-  el.innerHTML = items.map(item=>{
+  const items = q ? FINISHED.filter(i=>i.name.includes(q)||i.id.includes(q)) : FINISHED;
+  const withBom    = items.filter(i=>(BOM[i.id]||[]).length>0);
+  const withoutBom = items.filter(i=>(BOM[i.id]||[]).length===0);
+  const sorted = [...withBom, ...withoutBom];
+
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--text2);padding:6px 0;margin-bottom:4px;">
+      已設定 ${withBom.length} 個 ／ 未設定 ${withoutBom.length} 個
+    </div>` +
+  sorted.map(item=>{
     const bom = BOM[item.id]||[];
+    const hasBom = bom.length > 0;
     return `<div class="catdetail-row" onclick="editBom('${item.id}')">
       <div class="catdetail-emoji">${item.emoji}</div>
       <div class="catdetail-info">
         <div class="catdetail-name">${item.name}</div>
-        <div class="catdetail-id">${item.id} ・ 已設定 ${bom.length} 種材料</div>
+        <div class="catdetail-id">${item.id}</div>
       </div>
-      <i class="ti ti-chevron-right" style="color:var(--text3);"></i>
+      <div style="text-align:right;flex-shrink:0;">
+        ${hasBom
+          ? `<span class="p-tag tag-fin" style="font-size:11px;">✅ ${bom.length} 種材料</span>`
+          : `<span class="p-tag" style="background:var(--bg);color:var(--text3);font-size:11px;">未設定</span>`}
+      </div>
     </div>`;
   }).join('');
 }
+
 function editBom(id){
   bomEditId = id;
   const item = FINISHED.find(i=>i.id===id);
@@ -180,6 +208,7 @@ function editBom(id){
   renderBomEditList();
   showPage('admin-bom-edit');
 }
+
 function bomSearchMat(q){
   const res = document.getElementById('bom-mat-result');
   if(!q){ res.style.display='none'; return; }
@@ -193,6 +222,7 @@ function bomSearchMat(q){
       <span class="p-tag ${m.type==='semi'?'semi':'pack'}">${m.type==='semi'?'半成品':'包材'}</span>
     </div>`).join('');
 }
+
 function bomAddMat(id){
   const m = MATERIALS.find(i=>i.id===id);
   if(!m) return;
@@ -202,40 +232,65 @@ function bomAddMat(id){
   document.getElementById('bom-mat-result').style.display='none';
   renderBomEditList();
 }
+
 function bomRemoveMat(id){ bomEditItems=bomEditItems.filter(i=>i.id!==id); renderBomEditList(); }
-function bomChangeQty(id,delta){
+
+function bomChangeQty(id, delta){
   const m = bomEditItems.find(i=>i.id===id);
-  if(m) m.qty = Math.max(0.1, parseFloat((m.qty+delta).toFixed(1)));
+  if(!m) return;
+  m.qty = Math.max(0.1, parseFloat((m.qty + delta).toFixed(1)));
   renderBomEditList();
 }
+
+function bomSetQty(id, val){
+  const m = bomEditItems.find(i=>i.id===id);
+  if(!m) return;
+  const n = parseFloat(val);
+  if(!isNaN(n) && n > 0) m.qty = n;
+}
+
 function renderBomEditList(){
-  const el = document.getElementById('bom-mat-list');
-  const cnt= document.getElementById('bom-mat-count');
-  cnt.textContent = bomEditItems.length+'項';
-  if(!bomEditItems.length){ el.innerHTML='<div class="order-empty">尚未設定材料</div>'; return; }
-  const mat = (id)=>MATERIALS.find(i=>i.id===id)||{emoji:'📦',name:id};
+  const el  = document.getElementById('bom-mat-list');
+  const cnt = document.getElementById('bom-mat-count');
+  cnt.textContent = bomEditItems.length + '項';
+  if(!bomEditItems.length){ el.innerHTML='<div class="order-empty">尚未設定材料，請用上方搜尋加入</div>'; return; }
   el.innerHTML = bomEditItems.map(item=>{
-    const m = mat(item.id);
+    const m = MATERIALS.find(i=>i.id===item.id) || {emoji:'📦', name:item.id};
+    const tag = m.type==='semi' ? '半成品' : '包材';
+    const tagCls = m.type==='semi' ? 'semi' : 'pack';
     return `<div class="order-row">
       <div class="order-emoji">${m.emoji}</div>
-      <div class="order-info"><div class="order-name">${item.name||m.name}</div><div class="order-id">${item.id}</div></div>
-      <div class="order-qty-ctrl">
+      <div class="order-info">
+        <div class="order-name">${item.name||m.name}</div>
+        <div class="order-id">
+          ${item.id}
+          <span class="p-tag ${tagCls}" style="font-size:10px;">${tag}</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
         <button class="qty-edit-btn minus" onclick="bomChangeQty('${item.id}',-1)">−</button>
-        <span class="qty-num">${item.qty}</span>
+        <input type="number" value="${item.qty}" min="0.1" step="0.1"
+          style="width:52px;padding:4px 6px;font-size:15px;font-weight:700;border:1px solid var(--border);border-radius:6px;text-align:center;background:var(--surface);color:var(--text);"
+          onchange="bomSetQty('${item.id}',this.value)"
+          title="每生產1個成品需要的數量" />
         <button class="qty-edit-btn plus" onclick="bomChangeQty('${item.id}',1)">＋</button>
       </div>
       <button class="order-del" onclick="bomRemoveMat('${item.id}')"><i class="ti ti-x"></i></button>
     </div>`;
   }).join('');
 }
+
 function saveBomEdit(){
   if(!bomEditId) return;
+  if(!bomEditItems.length){
+    if(!confirm('確定要清空這個成品的 BOM 組合嗎？')) return;
+  }
   BOM[bomEditId] = JSON.parse(JSON.stringify(bomEditItems));
-  // 同步更新 BOM_RAW（轉成 name 格式存回）
   const nameIndex = {};
   MATERIALS.forEach(m=>{ nameIndex[m.id]=m.name; });
   BOM_RAW[bomEditId] = bomEditItems.map(i=>({n:nameIndex[i.id]||i.id, q:i.qty}));
-  showToast('✅ BOM 已更新');
+  saveBomToStorage();
+  showToast('✅ BOM 已儲存');
   showPage('admin-bom');
   renderBomList('');
 }
@@ -418,6 +473,7 @@ function renderFinance(){
 
 // ── 初始化 ──
 document.addEventListener('DOMContentLoaded', ()=>{
+  loadBomFromStorage();  // 先載入儲存的 BOM
   renderBomList('');
   renderAdminSuppliers('');
   renderAdminProducts();

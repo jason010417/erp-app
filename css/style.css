@@ -775,3 +775,9 @@ main { flex: 1; overflow-y: auto; padding: var(--header-h) 0 calc(var(--nav-h) +
 .ev-row-zero:hover { opacity: 1; }
 .qty-zero { color: var(--text3) !important; }
 .ev-fill-btn { font-size:11px; padding:2px 8px; border-radius:10px; background:var(--green-light); color:var(--green-dark); border:1px solid var(--green-mid); cursor:pointer; font-weight:600; }
+
+/* ===== 外展摘要卡片 ===== */
+.event-summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-top:6px; }
+.event-sum-row { display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-bottom:1px solid var(--border); font-size:14px; }
+.event-sum-row:last-child { border:none; }
+.event-sum-row strong { font-size:16px; font-weight:700; }

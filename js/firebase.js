@@ -76,6 +76,11 @@ function pullAll(){
       inventory = data.inventory;
       localStorage.setItem('erp_inventory', JSON.stringify(inventory));
     }
+    if(data.bom){
+      // 從 Firebase 拉取 BOM，合併到本機
+      Object.keys(data.bom).forEach(id => { BOM[id] = data.bom[id]; });
+      localStorage.setItem('erp_bom', JSON.stringify(BOM));
+    }
     if(data.logs){
       // logs 在 Firebase 是物件（key=時間戳），轉回陣列
       logs = Object.values(data.logs).sort((a,b)=>(a._ts||0)-(b._ts||0));
