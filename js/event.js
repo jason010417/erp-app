@@ -112,7 +112,11 @@ let evItems = [];  // 外展商品清單（編輯中）
 
 function newEvent(){
   editingEventId = null;
-  evItems = [];
+  // 自動把所有成品加入，帶出數量預設 0
+  evItems = FINISHED.map(item => ({
+    id: item.id, name: item.name, emoji: item.emoji,
+    price: item.price||0, takeQty: 0
+  }));
   document.getElementById('event-edit-title').textContent = '新增外展活動';
   ['ev-name','ev-location','ev-staff','ev-note'].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value='';
@@ -161,9 +165,8 @@ function evAddItem(id){
   const item = ALL_ITEMS.find(i=>i.id===id);
   if(!item) return;
   if(evItems.find(i=>i.id===id)){ showToast('⚠️ 已在清單中'); return; }
-  // 預設帶出數量：從庫存抓，最少1
-  const stock = inventory[item.id] ?? item.qty ?? 0;
-  evItems.push({id, name:item.name, emoji:item.emoji, price:item.price||0, takeQty: stock>0?stock:1});
+  // 預設帶出數量為 0，讓使用者自己填
+  evItems.push({id, name:item.name, emoji:item.emoji, price:item.price||0, takeQty:0});
   document.getElementById('ev-item-search').value='';
   document.getElementById('ev-search-result').style.display='none';
   renderEvItems();
@@ -172,34 +175,44 @@ function evRemoveItem(id){
   evItems = evItems.filter(i=>i.id!==id);
   renderEvItems();
 }
-function evChangeTakeQty(id, delta){
-  const item = evItems.find(i=>i.id===id);
-  if(item) item.takeQty = Math.max(1, (item.takeQty||1)+delta);
-  renderEvItems();
-}
 function renderEvItems(){
   const list  = document.getElementById('ev-item-list');
   const count = document.getElementById('ev-item-count');
-  count.textContent = evItems.length+'項';
+  const taking = evItems.filter(i=>i.takeQty>0).length;
+  count.textContent = `${taking} / ${evItems.length} 項已設數量`;
   if(!evItems.length){
     list.innerHTML='<div class="order-empty">尚未選擇商品</div>'; return;
   }
-  list.innerHTML = evItems.map(item=>{
+  list.innerHTML = evItems.map((item, idx)=>{
     const stock = inventory[item.id] ?? 0;
-    return `<div class="order-row">
+    const isTaking = item.takeQty > 0;
+    return `<div class="order-row ${isTaking?'':'ev-row-zero'}">
       <div class="order-emoji">${item.emoji}</div>
       <div class="order-info">
         <div class="order-name">${item.name}</div>
-        <div class="order-id">$${item.price} ／ 個・庫存 ${stock}</div>
+        <div class="order-id" style="display:flex;gap:8px;align-items:center;">
+          <span>庫存 <strong>${stock}</strong></span>
+          ${stock>0?`<button class="ev-fill-btn" onclick="evFillStock(${idx},${stock})">全帶</button>`:''}
+        </div>
       </div>
       <div class="order-qty-ctrl">
         <button class="qty-edit-btn minus" onclick="evChangeTakeQty('${item.id}',-1)">−</button>
-        <span class="qty-num">${item.takeQty||1}</span>
+        <span class="qty-num ${isTaking?'':'qty-zero'}">${item.takeQty}</span>
         <button class="qty-edit-btn plus"  onclick="evChangeTakeQty('${item.id}',1)">＋</button>
       </div>
       <button class="order-del" onclick="evRemoveItem('${item.id}')"><i class="ti ti-x"></i></button>
     </div>`;
   }).join('');
+}
+
+function evFillStock(idx, stock){
+  evItems[idx].takeQty = stock;
+  renderEvItems();
+}
+function evChangeTakeQty(id, delta){
+  const item = evItems.find(i=>i.id===id);
+  if(item) item.takeQty = Math.max(0, (item.takeQty||0)+delta);
+  renderEvItems();
 }
 
 function saveEvent(){
@@ -343,7 +356,7 @@ function openDayQtyModal(eventId, dateStr, dayNum){
   _dayQtyItems = (ev.items||[]).map(item=>{
     const prev = saved.find(s=>s.id===item.id);
     return { id:item.id, name:item.name, emoji:item.emoji, price:item.price||0,
-             takeQty: prev ? prev.takeQty : (item.takeQty||0) };
+             takeQty: prev ? prev.takeQty : 0 };  // 無前次設定預設為 0
   });
   document.getElementById('day-qty-title').textContent = `第 ${dayNum} 天 帶貨設定`;
   document.getElementById('day-qty-date').textContent  = fmtDate(dateStr);

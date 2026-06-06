@@ -769,3 +769,9 @@ main { flex: 1; overflow-y: auto; padding: var(--header-h) 0 calc(var(--nav-h) +
 .ss-qty-ok    { color: var(--green); }
 .ss-qty-low   { color: var(--amber); }
 .ss-qty-empty { color: var(--red); }
+
+/* ===== 外展商品清單 ===== */
+.ev-row-zero { opacity: 0.55; }
+.ev-row-zero:hover { opacity: 1; }
+.qty-zero { color: var(--text3) !important; }
+.ev-fill-btn { font-size:11px; padding:2px 8px; border-radius:10px; background:var(--green-light); color:var(--green-dark); border:1px solid var(--green-mid); cursor:pointer; font-weight:600; }
