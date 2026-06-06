@@ -781,3 +781,58 @@ main { flex: 1; overflow-y: auto; padding: var(--header-h) 0 calc(var(--nav-h) +
 .event-sum-row { display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-bottom:1px solid var(--border); font-size:14px; }
 .event-sum-row:last-child { border:none; }
 .event-sum-row strong { font-size:16px; font-weight:700; }
+
+/* ===== 外展離線模式 ===== */
+.offline-mode-card { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:var(--radius); margin-bottom:8px; border:1.5px solid var(--border); }
+.offline-mode-card .ti { font-size:24px; flex-shrink:0; }
+.offline-mode-card.active  { background:#EDE9F8; border-color:#C4B5F4; }
+.offline-mode-card.active .ti { color:#6B4FBB; }
+.offline-mode-card.normal  { background:var(--surface); }
+.offline-mode-card.normal .ti { color:var(--text3); }
+.offline-mode-card.uploaded{ background:var(--green-light); border-color:var(--green-mid); }
+.offline-mode-card.uploaded .ti { color:var(--green); }
+.om-title { font-size:14px; font-weight:700; color:var(--text); }
+.om-sub   { font-size:12px; color:var(--text2); margin-top:2px; }
+.offline-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+.offline-review-btn { display:flex; align-items:center; justify-content:center; gap:6px; padding:12px; background:#6B4FBB; color:white; border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:600; cursor:pointer; }
+.offline-exit-btn   { display:flex; align-items:center; justify-content:center; gap:6px; padding:12px; background:var(--bg); color:var(--text2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:14px; font-weight:600; cursor:pointer; }
+.offline-badge { display:flex; align-items:center; gap:8px; padding:8px 14px; background:#EDE9F8; color:#3D2780; border-radius:var(--radius-sm); font-size:13px; font-weight:600; margin-bottom:10px; }
+.offline-badge .ti { font-size:18px; }
+
+/* ===== 審核頁面 ===== */
+.review-meta-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:10px; }
+.review-meta-title{ font-size:17px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.review-meta-sub  { display:flex; flex-wrap:wrap; gap:10px; font-size:12px; color:var(--text2); }
+.review-meta-sub span { display:flex; align-items:center; gap:4px; }
+.review-meta-sub .ti { font-size:14px; }
+
+.review-item-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:8px; }
+.review-item-card.has-diff { border-color:#E24B4A; background:#FFF8F8; }
+.review-item-top  { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.review-item-emoji{ font-size:28px; flex-shrink:0; }
+.review-item-info { flex:1; }
+.review-item-name { font-size:14px; font-weight:600; color:var(--text); }
+.review-item-id   { font-size:11px; color:var(--text3); margin-top:2px; }
+.review-item-amount{ font-size:18px; font-weight:700; color:#6B4FBB; flex-shrink:0; }
+.review-item-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; text-align:center; }
+.review-stat      { background:var(--bg); border-radius:var(--radius-sm); padding:8px 4px; }
+.review-stat.sold { background:#FAECE7; }
+.review-stat.remain{ background:var(--green-light); }
+.review-stat.actual{ background:#EDE9F8; }
+.rs-num   { font-size:22px; font-weight:700; color:var(--text); }
+.rs-label { font-size:10px; color:var(--text3); margin-top:2px; }
+.review-diff-row  { margin-top:8px; padding:6px 10px; background:#FCEBEB; border-radius:6px; font-size:12px; color:#791F1F; font-weight:500; }
+
+.review-total-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin:10px 0; }
+.review-total-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:15px; border-bottom:1px solid var(--border); }
+.review-total-row:last-child { border:none; }
+.review-total-row.grand { font-size:18px; font-weight:700; padding-top:10px; }
+
+.diff-warning-card { background:#FAECE7; border:1.5px solid #F0997B; border-radius:var(--radius); padding:14px; margin:10px 0; }
+.diff-warning-title{ font-size:15px; font-weight:700; color:#712B13; display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.diff-warning-title .ti { font-size:18px; }
+.diff-warning-sub  { font-size:12px; color:#993C1D; margin-bottom:8px; }
+.diff-warning-row  { font-size:13px; color:#712B13; padding:3px 0; }
+
+.review-confirm-section { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-top:12px; }
+.review-uploaded-banner { display:flex; align-items:center; gap:14px; padding:16px; background:var(--green-light); border:1.5px solid var(--green-mid); border-radius:var(--radius); margin-top:12px; }

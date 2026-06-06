@@ -345,19 +345,24 @@ function renderEventStartSection(ev){
     </div>`;
 }
 
+// ── 補貨 / 每日帶貨 共用變數（移到最前面）──
+let _dayQtyEventId = null, _dayQtyDate = null, _dayQtyNum = null, _dayQtyItems = [];
+let _dayQtyMode = 'restock'; // 'restock' 補貨 | 'daily' 每日設定
+
 // ── 補貨 Modal ──
 function openAddStockModal(eventId){
   const ev = events.find(e=>e.id===eventId);
   if(!ev) return;
   _dayQtyEventId = eventId;
-  _dayQtyItems = (ev.items||[]).map(item=>({
+  _dayQtyMode    = 'restock';
+  _dayQtyItems = (ev.items||[]).filter(i=>(i.takeQty||0)>=0).map(item=>({
     id:item.id, name:item.name, emoji:item.emoji, price:item.price||0,
-    addQty:0,  // 本次補貨數量
+    addQty: 0,
     takeQty: item.takeQty||0,
     soldQty: calcItemSoldQty(eventId, item.id),
   }));
   document.getElementById('day-qty-title').textContent = '補貨';
-  document.getElementById('day-qty-date').textContent  = '輸入本次補貨數量';
+  document.getElementById('day-qty-date').textContent  = '輸入本次補貨數量（目前剩餘數量）';
   renderAddStockList();
   document.getElementById('dayQtyModal').style.display = 'flex';
 }
@@ -368,7 +373,7 @@ function renderAddStockList(){
       <div class="order-emoji">${item.emoji}</div>
       <div class="order-info">
         <div class="order-name">${item.name}</div>
-        <div class="order-id">帶出${item.takeQty} 賣出${item.soldQty} 剩${remaining}</div>
+        <div class="order-id" style="color:var(--text2);">剩餘 <strong>${remaining}</strong> 個 ／ 加入補貨：</div>
       </div>
       <div class="order-qty-ctrl">
         <button class="qty-edit-btn minus" onclick="addStockChange(${idx},-1)">−</button>
@@ -382,35 +387,41 @@ function addStockChange(idx, delta){
   _dayQtyItems[idx].addQty = Math.max(0, (_dayQtyItems[idx].addQty||0)+delta);
   renderAddStockList();
 }
+
+// Modal 儲存（判斷模式）
 function saveDayQty(){
-  // 判斷是補貨還是每日設定（舊版）
+  if(_dayQtyMode === 'restock') saveRestock();
+  else saveDailyQty();
+}
+function saveRestock(){
   const ev = events.find(e=>e.id===_dayQtyEventId);
   if(!ev) return;
-  // 把補貨數量加到 takeQty
-  _dayQtyItems.forEach(item=>{
+  const added = _dayQtyItems.filter(i=>i.addQty>0);
+  if(!added.length){ showToast('⚠️ 請輸入補貨數量'); return; }
+  added.forEach(item=>{
     const evItem = (ev.items||[]).find(i=>i.id===item.id);
-    if(evItem && item.addQty>0) evItem.takeQty = (evItem.takeQty||0) + item.addQty;
+    if(evItem) evItem.takeQty = (evItem.takeQty||0) + item.addQty;
   });
   saveEvents();
   document.getElementById('dayQtyModal').style.display = 'none';
-  showToast('✅ 補貨已記錄');
+  const totalAdded = added.reduce((s,i)=>s+i.addQty,0);
+  showToast(`✅ 補貨完成！共 ${added.length} 種商品，${totalAdded} 個`);
   viewEvent(_dayQtyEventId);
 }
 
-// ── 每日帶貨設定 Modal ──
-let _dayQtyEventId = null, _dayQtyDate = null, _dayQtyNum = null, _dayQtyItems = [];
-
+// ── 每日帶貨設定（保留相容舊資料）──
 function openDayQtyModal(eventId, dateStr, dayNum){
   const ev = events.find(e=>e.id===eventId);
   if(!ev) return;
   _dayQtyEventId = eventId;
   _dayQtyDate    = dateStr;
   _dayQtyNum     = dayNum;
+  _dayQtyMode    = 'daily';
   const saved = ev.dayItems?.[dateStr] || [];
   _dayQtyItems = (ev.items||[]).map(item=>{
     const prev = saved.find(s=>s.id===item.id);
     return { id:item.id, name:item.name, emoji:item.emoji, price:item.price||0,
-             takeQty: prev ? prev.takeQty : 0 };  // 無前次設定預設為 0
+             takeQty: prev ? prev.takeQty : 0 };
   });
   document.getElementById('day-qty-title').textContent = `第 ${dayNum} 天 帶貨設定`;
   document.getElementById('day-qty-date').textContent  = fmtDate(dateStr);
@@ -435,6 +446,16 @@ function renderDayQtyList(){
 function dayQtyChange(idx, delta){
   _dayQtyItems[idx].takeQty = Math.max(0, (_dayQtyItems[idx].takeQty||0)+delta);
   renderDayQtyList();
+}
+function saveDailyQty(){
+  const ev = events.find(e=>e.id===_dayQtyEventId);
+  if(!ev) return;
+  if(!ev.dayItems) ev.dayItems = {};
+  ev.dayItems[_dayQtyDate] = JSON.parse(JSON.stringify(_dayQtyItems));
+  saveEvents();
+  document.getElementById('dayQtyModal').style.display = 'none';
+  showToast(`✅ 第 ${_dayQtyNum} 天帶貨已儲存`);
+  viewEvent(_dayQtyEventId);
 }
 function saveDayQty(){
   const ev = events.find(e=>e.id===_dayQtyEventId);
