@@ -418,3 +418,38 @@ function confirmResetInventory() {
     showToast('✅ 庫存已重設（套用 data.js 初始數量）');
   }
 }
+
+// ===== 權限攔截 =====
+// 覆蓋 showPage，加入權限檢查
+const _origShowPage = window.showPage;
+window.showPage = function(name){
+  // 需要主管以上的頁面
+  const managerPages = ['admin','admin-products','admin-bom','admin-bom-edit',
+    'admin-suppliers','admin-system','finance','unpaid'];
+  // 需要管理員的頁面
+  const adminPages = [];
+
+  if(managerPages.includes(name) && !isManager()){
+    showToast('⚠️ 權限不足');
+    return;
+  }
+  if(adminPages.includes(name) && !isAdmin()){
+    showToast('⚠️ 權限不足');
+    return;
+  }
+  _origShowPage(name);
+};
+
+// 外展審核上傳需要主管
+const _origInitReviewPage = window.initReviewPage;
+window.initReviewPage = function(eventId){
+  if(!isManager()){ showToast('⚠️ 權限不足'); return; }
+  if(typeof _origInitReviewPage === 'function') _origInitReviewPage(eventId);
+};
+
+// 重設庫存需要管理員
+const _origConfirmReset = window.confirmResetInventory;
+window.confirmResetInventory = function(){
+  if(!isAdmin()){ showToast('⚠️ 權限不足'); return; }
+  _origConfirmReset();
+};

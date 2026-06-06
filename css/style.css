@@ -836,3 +836,18 @@ main { flex: 1; overflow-y: auto; padding: var(--header-h) 0 calc(var(--nav-h) +
 
 .review-confirm-section { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-top:12px; }
 .review-uploaded-banner { display:flex; align-items:center; gap:14px; padding:16px; background:var(--green-light); border:1.5px solid var(--green-mid); border-radius:var(--radius); margin-top:12px; }
+
+/* ===== 登入頁面 ===== */
+.login-role-btn { display:flex; align-items:center; gap:14px; padding:18px 16px; border-radius:var(--radius); border:1.5px solid var(--border); background:var(--surface); cursor:pointer; transition:all 0.1s; text-align:left; width:100%; }
+.login-role-btn:active { transform:scale(0.98); }
+.login-role-btn .ti:first-child { font-size:28px; flex-shrink:0; }
+.login-role-btn .ti:last-child  { font-size:18px; color:var(--text3); margin-left:auto; flex-shrink:0; }
+.login-role-btn > div { flex:1; }
+.lrb-title { font-size:17px; font-weight:700; color:var(--text); }
+.lrb-sub   { font-size:12px; color:var(--text2); margin-top:3px; }
+.login-role-btn.operator { border-color:var(--green-mid); }
+.login-role-btn.operator .ti:first-child { color:var(--green); }
+.login-role-btn.manager  { border-color:#85B7EB; }
+.login-role-btn.manager .ti:first-child  { color:#185FA5; }
+.login-role-btn.admin    { border-color:#C4B5F4; }
+.login-role-btn.admin .ti:first-child    { color:#6B4FBB; }

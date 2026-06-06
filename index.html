@@ -1,3 +1,29 @@
+<!-- 登入頁面 -->
+<div id="login-page" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:999;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+  <div style="text-align:center;margin-bottom:32px;">
+    <i class="ti ti-building-factory-2" style="font-size:56px;color:#1D9E75;display:block;margin-bottom:12px;"></i>
+    <div style="font-size:24px;font-weight:700;color:var(--text);">工廠庫存管理系統</div>
+    <div style="font-size:14px;color:var(--text2);margin-top:6px;">請選擇登入角色</div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px;">
+    <button class="login-role-btn operator" onclick="loginAs('operator')">
+      <i class="ti ti-hard-hat"></i>
+      <div><div class="lrb-title">操作員</div><div class="lrb-sub">進出貨・生產・POS收款</div></div>
+      <i class="ti ti-arrow-right"></i>
+    </button>
+    <button class="login-role-btn manager" onclick="loginAs('manager')">
+      <i class="ti ti-user-check"></i>
+      <div><div class="lrb-title">主管</div><div class="lrb-sub">後台管理・財務・審核上傳</div></div>
+      <i class="ti ti-lock" style="font-size:16px;"></i>
+    </button>
+    <button class="login-role-btn admin" onclick="loginAs('admin')">
+      <i class="ti ti-shield-check"></i>
+      <div><div class="lrb-title">管理員</div><div class="lrb-sub">最高權限・刪除・系統設定</div></div>
+      <i class="ti ti-lock" style="font-size:16px;"></i>
+    </button>
+  </div>
+</div>
+
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -30,15 +56,13 @@
         <div class="header-sub" id="header-time">載入中...</div>
       </div>
     </div>
-    <div class="header-right" style="display:flex;align-items:center;gap:8px;">
+    <div class="header-right" style="display:flex;align-items:center;gap:6px;">
       <div id="sync-status" onclick="manualSync()" title="點擊手動同步"
         style="display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 8px;border-radius:20px;background:var(--bg);">
         <i class="ti ti-cloud-off" style="color:#6B6B68;font-size:16px;"></i>
         <span style="font-size:11px;color:#6B6B68;">離線模式</span>
       </div>
-      <button class="icon-btn" onclick="showPage('home')" aria-label="首頁">
-        <i class="ti ti-home"></i>
-      </button>
+      <div id="header-role" style="font-size:11px;color:var(--text2);padding:3px 8px;background:var(--bg);border-radius:20px;cursor:pointer;" onclick="logout()"></div>
     </div>
   </header>
 
@@ -1734,6 +1758,25 @@
     </div>
   </div>
 
+  <!-- 登入 PIN Modal -->
+  <div class="modal-overlay" id="loginPinModal" style="display:none;">
+    <div class="supplier-modal" style="max-width:320px;">
+      <div class="supplier-modal-title" id="login-pin-title">登入</div>
+      <div class="cust-field">
+        <label>請輸入 PIN 碼</label>
+        <input type="password" id="login-pin-input" placeholder="輸入 PIN"
+          style="font-size:28px;letter-spacing:8px;text-align:center;" maxlength="8" />
+      </div>
+      <div id="login-pin-error" style="display:none;color:#E24B4A;font-size:13px;margin-top:6px;text-align:center;">
+        PIN 碼錯誤，請再試一次
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
+        <button class="modal-ok-btn" onclick="submitLoginPin()"><i class="ti ti-arrow-right"></i> 登入</button>
+        <button class="modal-cancel-btn" onclick="closeLoginPinModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 主管驗證 Modal -->
   <div class="modal-overlay" id="adminAuthModal" style="display:none;">
     <div class="supplier-modal" style="max-width:320px;">
@@ -1755,14 +1798,20 @@
     </div>
   </div>
 
-  <!-- 修改主管密碼 Modal -->
+  <!-- 修改 PIN Modal（管理員專用）-->
   <div class="modal-overlay" id="changePinModal" style="display:none;" onclick="closeChangePinModal(event)">
     <div class="supplier-modal" style="max-width:320px;">
-      <div class="supplier-modal-title"><i class="ti ti-key"></i> 修改主管密碼</div>
+      <div class="supplier-modal-title"><i class="ti ti-key"></i> 修改 PIN 碼</div>
       <div class="cust-form">
-        <div class="cust-field"><label>舊密碼</label><input type="password" id="old-pin" placeholder="輸入舊密碼" /></div>
-        <div class="cust-field"><label>新密碼（至少4位）</label><input type="password" id="new-pin" placeholder="輸入新密碼" /></div>
-        <div class="cust-field"><label>確認新密碼</label><input type="password" id="new-pin-confirm" placeholder="再輸入一次" /></div>
+        <div class="cust-field">
+          <label>修改哪個角色的 PIN</label>
+          <select id="change-pin-role" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);">
+            <option value="manager">主管（4位以上）</option>
+            <option value="admin">管理員（6位以上）</option>
+          </select>
+        </div>
+        <div class="cust-field"><label>新 PIN 碼</label><input type="password" id="new-pin-val" placeholder="輸入新 PIN" maxlength="8" /></div>
+        <div class="cust-field"><label>確認新 PIN 碼</label><input type="password" id="new-pin-confirm-val" placeholder="再輸入一次" maxlength="8" /></div>
       </div>
       <div id="pin-change-error" style="display:none;color:#E24B4A;font-size:13px;margin-top:6px;"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
