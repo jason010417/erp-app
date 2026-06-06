@@ -1,7 +1,7 @@
-const CACHE = 'erp-v18';
+const CACHE = 'erp-v19';
 const ASSETS = [
   './', './index.html', './css/style.css',
-  './js/data.js', './js/auth.js', './js/admin.js', './js/smartsearch.js', './js/app.js', './js/order.js', './js/pos.js', './js/estimate.js', './js/report.js', './js/process.js', './js/event.js', './manifest.json',
+  './js/data.js', './js/auth.js', './js/admin.js', './js/smartsearch.js', './js/firebase.js', './js/app.js', './js/order.js', './js/pos.js', './js/estimate.js', './js/report.js', './js/process.js', './js/event.js', './manifest.json',
   'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css',
   'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js',
 ];

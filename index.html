@@ -10,6 +10,9 @@
   <link rel="manifest" href="manifest.json" />
   <title>工廠庫存管理系統</title>
   <link rel="stylesheet" href="css/style.css" />
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <!-- Tabler Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
 </head>
@@ -27,7 +30,12 @@
         <div class="header-sub" id="header-time">載入中...</div>
       </div>
     </div>
-    <div class="header-right">
+    <div class="header-right" style="display:flex;align-items:center;gap:8px;">
+      <div id="sync-status" onclick="manualSync()" title="點擊手動同步"
+        style="display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 8px;border-radius:20px;background:var(--bg);">
+        <i class="ti ti-cloud-off" style="color:#6B6B68;font-size:16px;"></i>
+        <span style="font-size:11px;color:#6B6B68;">離線模式</span>
+      </div>
       <button class="icon-btn" onclick="showPage('home')" aria-label="首頁">
         <i class="ti ti-home"></i>
       </button>
@@ -1712,6 +1720,7 @@
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
 <script src="js/smartsearch.js"></script>
+<script src="js/firebase.js"></script>
 <script src="js/app.js"></script>
 <script src="js/order.js"></script>
 <script src="js/pos.js"></script>
