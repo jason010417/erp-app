@@ -1456,7 +1456,10 @@
       <div class="op-header">
         <button class="back-btn" onclick="showPage('events')"><i class="ti ti-arrow-left"></i></button>
         <div class="op-title" id="event-detail-title">外展活動</div>
-        <button class="small-btn" onclick="editCurrentEvent()"><i class="ti ti-edit"></i> 編輯</button>
+        <div style="display:flex;gap:6px;">
+          <button class="small-btn" onclick="editCurrentEvent()"><i class="ti ti-edit"></i> 編輯</button>
+          <button class="small-btn" style="background:#FCEBEB;color:#791F1F;border-color:#F09595;" onclick="confirmDeleteEvent()"><i class="ti ti-trash"></i></button>
+        </div>
       </div>
 
       <!-- 活動資訊 -->

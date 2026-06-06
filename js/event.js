@@ -630,3 +630,39 @@ function renderEventRanking(ev){
 
   el.innerHTML = acctHTML + rankHTML;
 }
+
+// ── 刪除 / 取消外展活動 ──
+function confirmDeleteEvent(){
+  const ev = events.find(e=>e.id===currentEventId);
+  if(!ev) return;
+  const hasSales = getEventLogs(ev.id).length > 0;
+
+  if(hasSales){
+    // 已有銷售記錄，只能取消不能刪除
+    if(confirm(`「${ev.name}」已有銷售記錄，\n只能取消（保留記錄），不能完全刪除。\n\n確定要取消此活動嗎？`)){
+      cancelEvent(ev.id);
+    }
+  } else {
+    // 沒有銷售記錄，可以直接刪除
+    if(confirm(`確定要刪除「${ev.name}」嗎？\n\n此操作無法復原。`)){
+      deleteEvent(ev.id);
+    }
+  }
+}
+
+function deleteEvent(id){
+  events = events.filter(e=>e.id!==id);
+  saveEvents();
+  showToast('🗑️ 外展活動已刪除');
+  showPage('events');
+}
+
+function cancelEvent(id){
+  const ev = events.find(e=>e.id===id);
+  if(!ev) return;
+  ev.cancelled = true;
+  ev.endDate   = todayStr(); // 提前結束
+  saveEvents();
+  showToast('❌ 外展活動已取消');
+  viewEvent(id);
+}
