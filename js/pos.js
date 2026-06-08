@@ -1,285 +1,245 @@
-// ===== 分類品項明細 =====
-let catDetailItems = [], catDetailSort = 'default', catDetailSearch = '';
+// ============================================================
+// pos.js — A 門市 POS 收款
+// 也支援外展模式（由 events.js 切換）
+// ============================================================
 
-function showCatItems(key, label) {
-  catDetailItems = ALL_ITEMS.filter(i => (i.cat || i.type) === key);
-  catDetailSort = 'default'; catDetailSearch = '';
-  document.getElementById('catdetail-title').textContent = label;
-  document.getElementById('catdetail-badge').textContent = catDetailItems.length + ' 種';
-  document.getElementById('catdetail-search').value = '';
-  ['sort-default','sort-low','sort-name'].forEach(id => document.getElementById(id).classList.remove('active'));
-  document.getElementById('sort-default').classList.add('active');
-  renderCatDetail();
-  showPage('catdetail');
+let _posCart       = [];       // 購物車品項
+let _posPayMethod  = 'cash';
+let _posEventId    = null;     // 外展模式時設定
+let _posDiscount   = { type:'none', value:0 };
+
+// ── 初始化 ──
+function initPOS(eventId){
+  _posCart      = [];
+  _posPayMethod = 'cash';
+  _posEventId   = eventId || null;
+  _posDiscount  = { type:'none', value:0 };
+
+  // 重設表單
+  const searchEl = document.getElementById('pos-search');
+  if(searchEl) searchEl.value = '';
+  const resEl = document.getElementById('pos-search-result');
+  if(resEl) resEl.style.display = 'none';
+  const discType = document.getElementById('pos-discount-type');
+  if(discType) discType.value = 'none';
+  const discVal = document.getElementById('pos-discount-value');
+  if(discVal) discVal.value = '0';
+
+  selectPayMethod('cash');
+  renderCart();
+  calcPOSTotal();
+
+  // 外展 banner
+  const banner = document.getElementById('event-pos-banner');
+  if(banner) banner.style.display = _posEventId ? 'block' : 'none';
 }
 
-function filterCatDetail(val) { catDetailSearch = val; renderCatDetail(); }
+// ── 加入商品 ──
+function addPOSItem(productId){
+  const item = getItem(productId);
+  if(!item) return;
 
-function sortCatDetail(mode) {
-  catDetailSort = mode;
-  ['sort-default','sort-low','sort-name'].forEach(id => document.getElementById(id).classList.remove('active'));
-  document.getElementById('sort-'+mode).classList.add('active');
-  renderCatDetail();
-}
-
-function renderCatDetail() {
-  let items = catDetailItems.filter(i => !catDetailSearch || i.name.includes(catDetailSearch) || i.id.includes(catDetailSearch));
-  if (catDetailSort === 'low') {
-    items = [...items].sort((a,b) => {
-      const qa = inventory[a.id] ?? a.qty, qb = inventory[b.id] ?? b.qty;
-      return qa - qb;
-    });
-  } else if (catDetailSort === 'name') {
-    items = [...items].sort((a,b) => a.name.localeCompare(b.name, 'zh-TW'));
-  }
-  const list = document.getElementById('catdetail-list');
-  if (!items.length) { list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);">找不到品項</div>'; return; }
-  list.innerHTML = items.map(item => {
-    const q = inventory[item.id] ?? item.qty;
-    const cls = q <= 0 ? 'empty' : q <= item.min && item.min > 0 ? 'low' : 'ok';
-    return `<div class="catdetail-row" onclick="catDetailTap('${item.id}')">
-      <div class="catdetail-emoji">${item.emoji}</div>
-      <div class="catdetail-info">
-        <div class="catdetail-name">${item.name}</div>
-        <div class="catdetail-id">${item.id}</div>
-      </div>
-      <div class="catdetail-right">
-        <div class="catdetail-qty ${cls}">${q}</div>
-        <div class="catdetail-unit">個</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function catDetailTap(id) {
-  const item = ALL_ITEMS.find(i => i.id === id);
-  if (!item) return;
-  const q = inventory[id] ?? item.qty;
-  const status = q <= 0 ? '🔴 缺貨' : q <= item.min && item.min > 0 ? '⚠️ 偏少' : '✅ 正常';
-  showToast(`${item.emoji} ${item.name}\n庫存：${q} 個 ${status}`);
-}
-
-// ===== POS 系統 =====
-let posCart = [];
-let posDiscount = 0;
-let posPayMethod = 'cash';
-let posCashStr = '0';
-let posScanActive = false, posAnimFrame = null;
-
-function togglePosScan() {
-  if (posScanActive) { stopPosScan(); return; }
-  if (!navigator.mediaDevices?.getUserMedia) { showToast('⚠️ 請手動搜尋商品'); return; }
-  const video = document.getElementById('posScanVideo');
-  posScanActive = true;
-  document.getElementById('posScanBox').classList.add('scanning');
-  navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' } })
-    .then(stream => {
-      video.srcObject = stream; video.style.display = 'block';
-      document.getElementById('posScanPlaceholder').style.display = 'none';
-      document.getElementById('posScanLine').style.display = 'block';
-      video.play(); posScanLoop(video);
-    }).catch(() => { showToast('⚠️ 無法開啟相機'); stopPosScan(); });
-}
-function posScanLoop(video) {
-  if (!posScanActive) return;
-  const canvas = document.getElementById('posScanCanvas');
-  const ctx = canvas.getContext('2d');
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    if (typeof jsQR !== 'undefined') {
-      const code = jsQR(imgData.data, imgData.width, imgData.height, {inversionAttempts:'dontInvert'});
-      if (code?.data) { addPOSItem(code.data); stopPosScan(); return; }
+  // 外展模式：檢查帶貨量
+  if(_posEventId){
+    const event    = typeof events !== 'undefined' ? events.find(e=>e.id===_posEventId) : null;
+    const evItem   = event?.items?.find(i=>i.id===productId);
+    if(evItem){
+      const soldQty = typeof calcEventItemSoldQty==='function'
+        ? calcEventItemSoldQty(_posEventId, productId) : 0;
+      const remain  = Math.max(0, (evItem.takeQty||0) - soldQty);
+      // 目前購物車中已有幾個
+      const inCart  = _posCart.find(i=>i.id===productId)?.qty || 0;
+      if(inCart + 1 > remain){
+        showToast(`⚠️ ${item.name} 帶貨數量不足（剩 ${remain} 個）`);
+        return;
+      }
     }
   }
-  posAnimFrame = requestAnimationFrame(() => posScanLoop(video));
-}
-function stopPosScan() {
-  if (!posScanActive) return;
-  posScanActive = false;
-  if (posAnimFrame) { cancelAnimationFrame(posAnimFrame); posAnimFrame = null; }
-  const video = document.getElementById('posScanVideo');
-  if (video?.srcObject) { video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject = null; }
-  video.style.display = 'none';
-  document.getElementById('posScanPlaceholder').style.display = 'flex';
-  document.getElementById('posScanLine').style.display = 'none';
-  document.getElementById('posScanBox').classList.remove('scanning');
+
+  const existing = _posCart.find(i => i.id === productId);
+  if(existing){
+    existing.qty++;
+  } else {
+    _posCart.push({
+      id:            productId,
+      name:          item.name,
+      emoji:         item.emoji,
+      qty:           1,
+      originalPrice: item.salePrice,
+      unitPrice:     item.salePrice,
+    });
+  }
+  renderCart();
+  calcPOSTotal();
 }
 
-function posSearchItems(val) {
-  const res = document.getElementById('posSearchResult');
-  if (!val || val.length < 1) { res.style.display = 'none'; return; }
-  const items = FINISHED.filter(i => i.name.includes(val) || i.id.includes(val)).slice(0,6);
-  if (!items.length) { res.style.display = 'none'; return; }
-  res.style.display = 'block';
-  res.innerHTML = items.map(item => {
-    const stock = inventory[item.id] ?? item.qty;
-    return `<div class="pos-search-result-item" onclick="addPOSItemById('${item.id}')">
-      <span>${item.emoji}</span>
-      <span style="flex:1;font-size:13px;">${item.name}</span>
-      <span style="font-size:11px;color:var(--text3);">庫存${stock}</span>
-      <span class="p-price">$${item.price||0}</span>
+// 讓 smartsearch 可以呼叫
+window.addPOSItem = addPOSItem;
+
+function removePOSItem(idx){ _posCart.splice(idx,1); renderCart(); calcPOSTotal(); }
+function changePOSQty(idx, delta){
+  const item = _posCart[idx];
+  if(!item) return;
+  item.qty = Math.max(1, item.qty + delta);
+  renderCart(); calcPOSTotal();
+}
+function changePOSItemPrice(idx, val){
+  const item = _posCart[idx];
+  if(!item) return;
+  item.unitPrice = parseInt(val) || 0;
+  calcPOSTotal();
+}
+
+function clearPOS(){
+  _posCart = [];
+  renderCart();
+  calcPOSTotal();
+  showToast('🗑️ 購物車已清空');
+}
+
+// ── 渲染購物車 ──
+function renderCart(){
+  const el    = document.getElementById('pos-cart');
+  const count = document.getElementById('pos-count');
+  if(!el) return;
+  const total = _posCart.reduce((s,i)=>s+i.qty,0);
+  if(count) count.textContent = total + ' 項';
+  if(!_posCart.length){
+    el.innerHTML = '<div class="order-empty">請搜尋或輸入編號加入商品</div>'; return;
+  }
+  el.innerHTML = _posCart.map((item, idx) => {
+    const isDis = item.unitPrice !== item.originalPrice;
+    return `<div class="order-row">
+      <div class="order-emoji">${item.emoji}</div>
+      <div class="order-info">
+        <div class="order-name">${item.name}</div>
+        <div class="order-id" style="display:flex;align-items:center;gap:6px;">
+          ${isDis?`<span style="text-decoration:line-through;color:var(--text3);font-size:11px;">$${item.originalPrice}</span>`:''}
+          <input type="number" class="unit-price-input ${isDis?'discounted':''}"
+            value="${item.unitPrice}" min="0"
+            onchange="changePOSItemPrice(${idx},this.value)"
+            onclick="this.select()" />
+        </div>
+      </div>
+      <div class="qty-ctrl">
+        <button class="qty-btn" onclick="changePOSQty(${idx},-1)">−</button>
+        <span class="qty-num">${item.qty}</span>
+        <button class="qty-btn" onclick="changePOSQty(${idx},1)">＋</button>
+      </div>
+      <button class="order-del" onclick="removePOSItem(${idx})"><i class="ti ti-x"></i></button>
     </div>`;
   }).join('');
 }
 
-function addPOSItem(barcode) {
-  const item = BARCODE_INDEX[barcode];
-  if (!item) { showToast('⚠️ 找不到此條碼'); return; }
-  if (!item.price) { showToast('⚠️ 此品項無售價'); return; }
-  addPOSItemById(item.id);
+// ── 計算金額 ──
+function calcPOSTotal(){
+  const subtotal  = _posCart.reduce((s,i) => s + i.unitPrice * i.qty, 0);
+  const discType  = document.getElementById('pos-discount-type')?.value  || 'none';
+  const discValue = parseInt(document.getElementById('pos-discount-value')?.value) || 0;
+  let total = subtotal;
+  if(discType==='percent') total = Math.round(subtotal*(1-discValue/100));
+  if(discType==='amount')  total = Math.max(0, subtotal-discValue);
+  _posDiscount = { type:discType, value:discValue };
+
+  const subEl   = document.getElementById('pos-subtotal');
+  const totalEl = document.getElementById('pos-total');
+  if(subEl)   subEl.textContent   = fmtMoney(subtotal);
+  if(totalEl) totalEl.textContent = fmtMoney(total);
+
+  calcChange();
+  return total;
 }
 
-function addPOSItemById(id) {
-  const item = ALL_ITEMS.find(i => i.id === id);
-  if (!item || !item.price) { showToast('⚠️ 此品項無售價，無法加入'); return; }
-  const stock = inventory[id] ?? item.qty;
-  const existing = posCart.find(c => c.id === id);
-  if (existing) {
-    if (existing.qty >= stock) { showToast(`⚠️ 庫存只剩 ${stock} 個`); return; }
-    existing.qty++;
+// ── 付款方式 ──
+function selectPayMethod(method){
+  _posPayMethod = method;
+  ['cash','card','transfer'].forEach(m =>
+    document.getElementById(`pay-${m}`)?.classList.toggle('active', m===method));
+  const cashSection = document.getElementById('cash-change-section');
+  if(cashSection) cashSection.style.display = method==='cash' ? 'block' : 'none';
+}
+
+function calcChange(){
+  const total    = parseInt(document.getElementById('pos-total')?.textContent?.replace(/[^0-9]/g,'')) || 0;
+  const received = parseInt(document.getElementById('pos-cash-received')?.value) || 0;
+  const change   = Math.max(0, received - total);
+  const el       = document.getElementById('pos-change');
+  if(el) el.textContent = fmtMoney(change);
+}
+
+// ── 返回 ──
+function posBack(){
+  if(_posEventId){
+    showPage('event-detail');
   } else {
-    if (stock <= 0) { showToast('⚠️ 此品項庫存不足'); return; }
-    posCart.push({ id, name:item.name, emoji:item.emoji, price:item.price, qty:1 });
+    showPage('sales-menu');
   }
-  document.getElementById('posSearch').value = '';
-  document.getElementById('posSearchResult').style.display = 'none';
-  renderPOSCart();
-  showToast(`✅ 加入：${item.name}`);
 }
 
-function renderPOSCart() {
-  const cart = document.getElementById('posCart');
-  const countEl = document.getElementById('posCartCount');
-  if (!posCart.length) {
-    cart.innerHTML = '<div class="order-empty">還沒有商品，請掃碼或搜尋加入</div>';
-    countEl.textContent = '0 項';
-    updatePOSTotals(); return;
+// ── 確認收款 ──
+function confirmPOS(){
+  if(!_posCart.length){ showToast('⚠️ 購物車是空的'); return; }
+  const total    = calcPOSTotal();
+  const locId    = _posEventId
+    ? ('event_'+_posEventId)
+    : (getMainLocation()?.id || 'store_A');
+  const now      = nowStr();
+  const refId    = 'POS' + Date.now();
+
+  // 扣庫存（門市模式）
+  if(!_posEventId){
+    const storeLocId = getMainLocation()?.id || 'store_A';
+    _posCart.forEach(item => {
+      adjustStock(item.id, storeLocId, -item.qty, {
+        op:      'pos_sale',
+        refId,
+        refType: 'pos',
+        note:    'A 門市 POS',
+      });
+    });
   }
-  countEl.textContent = posCart.length + ' 項';
-  cart.innerHTML = posCart.map((item,idx) => `
-    <div class="pos-cart-row">
-      <div class="pos-cart-emoji">${item.emoji}</div>
-      <div style="flex:1;">
-        <div class="pos-cart-name">${item.name}</div>
-        <div class="pos-cart-price">單價 $${item.price}</div>
-      </div>
-      <div class="pos-cart-ctrl">
-        <button class="pos-nk minus" onclick="posChangeQty(${idx},-1)">−</button>
-        <span class="pos-cart-qty">${item.qty}</span>
-        <button class="pos-nk plus"  onclick="posChangeQty(${idx},1)">＋</button>
-      </div>
-      <div class="pos-cart-subtotal">$${item.price * item.qty}</div>
-      <button class="pos-cart-del" onclick="posRemove(${idx})"><i class="ti ti-x"></i></button>
-    </div>`).join('');
-  updatePOSTotals();
-}
 
-function posChangeQty(idx, delta) {
-  posCart[idx].qty = Math.max(1, posCart[idx].qty + delta);
-  const stock = inventory[posCart[idx].id] ?? 0;
-  if (posCart[idx].qty > stock) { posCart[idx].qty = stock; showToast(`⚠️ 最多 ${stock} 個`); }
-  renderPOSCart();
-}
-function posRemove(idx) { posCart.splice(idx, 1); renderPOSCart(); }
-
-function updatePOSTotals() {
-  const sub = posCart.reduce((s,i) => s + i.price * i.qty, 0);
-  const total = Math.round(sub * (1 - posDiscount/100));
-  document.getElementById('posSubtotal').textContent = '$' + sub;
-  document.getElementById('posTotal').textContent = '$' + total;
-  updateChange();
-}
-
-function changeDiscount(delta) {
-  posDiscount = Math.max(0, Math.min(100, posDiscount + delta));
-  document.getElementById('posDiscountLabel').textContent = posDiscount + '%';
-  updatePOSTotals();
-}
-
-function selectPay(method) {
-  posPayMethod = method;
-  ['cash','card','transfer','line'].forEach(m => document.getElementById('pay-'+m).classList.toggle('active', m === method));
-  document.getElementById('cashSection').style.display = method === 'cash' ? 'block' : 'none';
-}
-
-function cashPress(k) {
-  if (k === 'del')     { posCashStr = posCashStr.length > 1 ? posCashStr.slice(0,-1) : '0'; }
-  else if (k === '00') { if (posCashStr !== '0' && posCashStr.length < 6) posCashStr += '00'; }
-  else { posCashStr = posCashStr === '0' ? k : posCashStr.length < 6 ? posCashStr+k : posCashStr; }
-  document.getElementById('cashDisplay').textContent = parseInt(posCashStr) || 0;
-  updateChange();
-}
-
-function updateChange() {
-  const total = parseInt(document.getElementById('posTotal').textContent.replace('$','')) || 0;
-  const cash  = parseInt(posCashStr) || 0;
-  const change = cash - total;
-  const row = document.getElementById('changeRow');
-  if (posPayMethod === 'cash' && cash > 0) {
-    row.style.display = 'block';
-    document.getElementById('changeAmt').textContent = change >= 0 ? '$'+change : '⚠️ 不足 $'+Math.abs(change);
-    document.getElementById('changeAmt').style.color = change >= 0 ? '#1D9E75' : '#E24B4A';
-  } else { row.style.display = 'none'; }
-}
-
-function clearPOS() {
-  posCart = []; posDiscount = 0; posPayMethod = 'cash'; posCashStr = '0';
-  document.getElementById('posDiscountLabel').textContent = '0%';
-  document.getElementById('cashDisplay').textContent = '0';
-  document.getElementById('changeRow').style.display = 'none';
-  ['cash','card','transfer','line'].forEach(m => document.getElementById('pay-'+m).classList.toggle('active', m === 'cash'));
-  document.getElementById('cashSection').style.display = 'block';
-  renderPOSCart();
-}
-
-function confirmPOS() {
-  if (!posCart.length) { showToast('⚠️ 購物車是空的'); return; }
-  const total = parseInt(document.getElementById('posTotal').textContent.replace('$','')) || 0;
-  if (posPayMethod === 'cash') {
-    const cash = parseInt(posCashStr) || 0;
-    if (cash < total) { showToast('⚠️ 現金不足，請重新輸入'); return; }
-  }
-  // 扣庫存、寫記錄
-  const now = new Date().toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-  posCart.forEach(item => {
-    inventory[item.id] = Math.max(0, (inventory[item.id] ?? 0) - item.qty);
-    logs.push({ op:'ship', op_label:'POS出售', id:item.id, name:item.name, emoji:item.emoji, qty:item.qty, time:now });
+  // 寫銷售記錄（每個品項一筆）
+  _posCart.forEach(item => {
+    addLog({
+      op:          'pos_sale',
+      locationId:  locId,
+      productId:   item.id,
+      productName: item.name,
+      qty:         item.qty,
+      unitPrice:   item.unitPrice,
+      amount:      item.unitPrice * item.qty,
+      payMethod:   _posPayMethod,
+      eventId:     _posEventId || null,
+      refId,
+    });
   });
-  saveInventory(); saveLogs();
-  renderHome(); renderFinished(); renderMaterials(); renderLogs();
-  // 顯示收據
-  showReceipt(total, now);
+
+  // 外展模式：通知 events.js 更新剩餘數量
+  if(_posEventId && typeof onEventSale === 'function'){
+    onEventSale(_posEventId, _posCart);
+  }
+
+  showToast(`✅ 收款完成！${fmtMoney(total)}`);
+  showReceipt(total);
+  _posCart = [];
+  renderCart();
+  calcPOSTotal();
 }
 
-function showReceipt(total, time) {
-  const sub = posCart.reduce((s,i) => s + i.price * i.qty, 0);
-  const payLabels = { cash:'現金', card:'刷卡', transfer:'轉帳', line:'Line Pay' };
-  const cash = parseInt(posCashStr) || 0;
-  const change = posPayMethod === 'cash' ? cash - total : 0;
-  const itemsHTML = posCart.map(item => `
-    <div class="receipt-item">
-      <span>${item.emoji} ${item.name} ×${item.qty}</span>
-      <span>$${item.price * item.qty}</span>
-    </div>`).join('');
-  document.getElementById('receiptCard').innerHTML = `
-    <div class="receipt-header">
-      <div class="receipt-shop">🏪 工廠直售</div>
-      <div class="receipt-date">${time}</div>
-    </div>
-    ${itemsHTML}
-    <div class="receipt-footer">
-      <div class="receipt-total-row"><span>小計</span><span>$${sub}</span></div>
-      ${posDiscount ? `<div class="receipt-total-row"><span>折扣 ${posDiscount}%</span><span>-$${sub-total}</span></div>` : ''}
-      <div class="receipt-total-row receipt-grand"><span>總計</span><span>$${total}</span></div>
-      <div class="receipt-pay">付款方式：${payLabels[posPayMethod]}</div>
-      ${posPayMethod==='cash' && change>=0 ? `<div class="receipt-change">找零 $${change}</div>` : ''}
-    </div>`;
-  showPage('receipt');
+// ── 收據（簡易）──
+function showReceipt(total){
+  const cashReceived = parseInt(document.getElementById('pos-cash-received')?.value) || 0;
+  const change       = Math.max(0, cashReceived - total);
+  const lines        = _posCart.map(i =>
+    `${i.emoji} ${i.name} x${i.qty}  ${fmtMoney(i.unitPrice*i.qty)}`
+  ).join('\n');
+  const msg = `✅ 收款完成\n\n${lines}\n\n總計：${fmtMoney(total)}` +
+    (_posPayMethod==='cash' && cashReceived ? `\n收款：${fmtMoney(cashReceived)}\n找零：${fmtMoney(change)}` : '');
+  // 簡易 Toast 就夠了，未來可改成正式收據頁面
+  setTimeout(() => showToast('🧾 ' + fmtMoney(total) + ' 已記錄'), 500);
 }
 
-function newSale() {
-  clearPOS();
-  showPage('pos');
-}
+document.addEventListener('DOMContentLoaded', () => {
+  initPOS();
+});

@@ -1,14 +1,16 @@
-// ===== 權限系統 =====
+// ============================================================
+// auth.js — 權限系統（方案B）
+// 預設操作員身份，需要時提升權限
+// ============================================================
 
-// ── Session ──
-const SESSION_KEY = 'erp_session';
+const SESSION_KEY   = 'erp_session';
 const SESSION_HOURS = 8;
 
+// ── Session ──
 function getSession(){
   try {
-    const s = JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
     if(!s) return null;
-    // 超過 8 小時自動登出
     if(Date.now() - s.loginAt > SESSION_HOURS * 3600 * 1000){
       localStorage.removeItem(SESSION_KEY);
       return null;
@@ -22,159 +24,168 @@ function setSession(role){
 function clearSession(){
   localStorage.removeItem(SESSION_KEY);
 }
-function currentRole(){
-  return getSession()?.role || null;
-}
-function isOperator(){ return ['operator','manager','admin'].includes(currentRole()); }
-function isManager() { return ['manager','admin'].includes(currentRole()); }
-function isAdmin()   { return currentRole() === 'admin'; }
 
-// ── PIN 管理（存 Firebase + localStorage 備份）──
+// ── 角色判斷 ──
+function currentRole(){ return getSession()?.role || 'operator'; }
+function isLoggedIn()  { return true; } // 永遠可以用操作員身份
+function isOperator()  { return true; } // 操作員功能全員開放
+function isManager()   { return ['manager','admin'].includes(currentRole()); }
+function isAdmin()     { return currentRole() === 'admin'; }
+
+// ── PIN 管理 ──
 let _pins = {
   manager: localStorage.getItem('erp_pin_manager') || '1234',
-  admin:   '876300',  // 管理員 PIN 固定，不存本機
+  admin:   localStorage.getItem('erp_pin_admin')   || '876300',
 };
 
 function loadPinsFromFirebase(){
   if(typeof _db === 'undefined' || !_db) return;
-  _db.ref('erp/config/pins').once('value').then(snap=>{
+  _db.ref('erp/config/pins').once('value').then(snap => {
     const data = snap.val();
     if(!data) return;
     if(data.manager){ _pins.manager = data.manager; localStorage.setItem('erp_pin_manager', data.manager); }
-    if(data.admin)  { _pins.admin   = data.admin; }
-  }).catch(()=>{});
+    if(data.admin)  { _pins.admin   = data.admin;   localStorage.setItem('erp_pin_admin',   data.admin);   }
+  }).catch(() => {});
 }
 function savePinsToFirebase(){
   if(typeof _db === 'undefined' || !_db) return;
-  _db.ref('erp/config/pins').set({ manager: _pins.manager, admin: _pins.admin }).catch(()=>{});
+  _db.ref('erp/config/pins').set(_pins).catch(() => {});
 }
 
 // ── 權限檢查 ──
-function checkRole(required, callback){
-  // required: 'manager' | 'admin'
-  if(required === 'manager' && isManager()){ if(callback) callback(); return true; }
-  if(required === 'admin'   && isAdmin())  { if(callback) callback(); return true; }
-  showToast('⚠️ 權限不足');
+const MANAGER_PAGES = [
+  'admin','admin-products','admin-bom','admin-bom-edit',
+  'admin-suppliers','admin-system','admin-locations','admin-import',
+  'finance','unpaid','event-review',
+];
+const ADMIN_PAGES = ['admin-system'];
+
+function canAccess(pageName){
+  if(ADMIN_PAGES.includes(pageName))   return isAdmin();
+  if(MANAGER_PAGES.includes(pageName)) return isManager();
+  return true;
+}
+
+// 需要主管才能執行的操作（inline，不跳頁）
+function requireManager(callback, reason){
+  if(isManager()){
+    if(typeof callback === 'function') callback();
+    return true;
+  }
+  // 彈出提升權限 Modal
+  openEscalateModal('manager', callback, reason);
+  return false;
+}
+function requireAdmin(callback, reason){
+  if(isAdmin()){
+    if(typeof callback === 'function') callback();
+    return true;
+  }
+  openEscalateModal('admin', callback, reason);
   return false;
 }
 
-// ── 登入頁面 ──
-function showLoginPage(){
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('login-page').style.display = 'flex';
-  loadPinsFromFirebase();
-}
-function hideLoginPage(){
-  document.getElementById('login-page').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
+// ── 提升權限 Modal（方案B 核心）──
+let _escalateCallback = null;
+let _escalateTarget   = null;
+
+function openEscalateModal(targetRole, callback, reason){
+  _escalateTarget   = targetRole;
+  _escalateCallback = callback;
+
+  const labels = { manager:'👔 主管', admin:'👑 管理員' };
+  document.getElementById('escalate-title').textContent =
+    labels[targetRole] + ' 權限驗證';
+  document.getElementById('escalate-reason').textContent =
+    reason || '此操作需要更高權限';
+  document.getElementById('escalate-pin-input').value = '';
+  document.getElementById('escalate-pin-error').style.display = 'none';
+  document.getElementById('escalateModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('escalate-pin-input').focus(), 200);
 }
 
-function loginAs(role){
-  if(role === 'operator'){
-    setSession('operator');
-    hideLoginPage();
-    applyRoleUI();
-    showToast('👷 操作員模式');
-    return;
-  }
-  // 主管 / 管理員需要 PIN
-  _loginTarget = role;
-  document.getElementById('login-pin-title').textContent =
-    role === 'admin' ? '👑 管理員登入' : '👔 主管登入';
-  document.getElementById('login-pin-input').value = '';
-  document.getElementById('login-pin-error').style.display = 'none';
-  document.getElementById('loginPinModal').style.display = 'flex';
-  setTimeout(()=>document.getElementById('login-pin-input').focus(), 200);
-}
+function submitEscalatePin(){
+  const val        = document.getElementById('escalate-pin-input').value.trim();
+  const correctPin = _pins[_escalateTarget];
 
-let _loginTarget = null;
-function submitLoginPin(){
-  const val = document.getElementById('login-pin-input').value.trim();
-  const correctPin = _loginTarget === 'admin' ? _pins.admin : _pins.manager;
   if(val === correctPin){
-    setSession(_loginTarget);
-    document.getElementById('loginPinModal').style.display = 'none';
-    hideLoginPage();
+    // 提升 Session
+    setSession(_escalateTarget);
+    document.getElementById('escalateModal').style.display = 'none';
     applyRoleUI();
-    showToast(_loginTarget==='admin' ? '👑 管理員模式' : '👔 主管模式');
+    const labels = { manager:'👔 已切換為主管模式', admin:'👑 已切換為管理員模式' };
+    showToast(labels[_escalateTarget]);
+    // 執行原本要做的事
+    if(typeof _escalateCallback === 'function'){
+      _escalateCallback();
+      _escalateCallback = null;
+    }
   } else {
-    document.getElementById('login-pin-error').style.display = 'block';
-    document.getElementById('login-pin-input').value = '';
-    document.getElementById('login-pin-input').focus();
+    document.getElementById('escalate-pin-error').style.display = 'block';
+    document.getElementById('escalate-pin-input').value = '';
+    document.getElementById('escalate-pin-input').focus();
   }
 }
-function closeLoginPinModal(){
-  document.getElementById('loginPinModal').style.display = 'none';
+function closeEscalateModal(e){
+  if(!e || e.target === document.getElementById('escalateModal')){
+    document.getElementById('escalateModal').style.display = 'none';
+    _escalateCallback = null;
+  }
 }
 
-// ── 登出 ──
-function logout(){
-  if(!confirm('確定要登出嗎？')) return;
-  clearSession();
+// ── 降回操作員 ──
+function downgradeToOperator(){
+  setSession('operator');
   applyRoleUI();
-  showLoginPage();
+  showToast('👷 已切換回操作員模式');
 }
 
 // ── 套用角色 UI ──
 function applyRoleUI(){
-  const role = currentRole() || 'operator';
-  // 更新 header 顯示角色
-  const roleEl = document.getElementById('header-role');
-  if(roleEl){
-    const labels = { operator:'👷 操作員', manager:'👔 主管', admin:'👑 管理員' };
-    roleEl.textContent = labels[role] || '';
-  }
+  const role   = currentRole();
+  const labels = { operator:'👷 操作員', manager:'👔 主管', admin:'👑 管理員' };
+  const el     = document.getElementById('header-role');
+  if(el) el.textContent = labels[role] || '👷 操作員';
 }
 
-// ── requestAdmin 改為根據角色要求 ──
-// 覆蓋舊的 requestAdmin，改為彈出登入而非 PIN
-window.requestAdmin = function(callback, reason){
-  if(isManager()){
-    if(typeof callback === 'function') callback();
-    return;
-  }
-  // 需要登入主管
-  showToast('⚠️ 權限不足，請先以主管身份登入');
-};
-
-// ── PIN 修改（管理員專用）──
+// ── 修改 PIN（管理員專用）──
 function openChangePinModal(){
-  if(!checkRole('admin')) return;
-  document.getElementById('change-pin-role').value = 'manager';
-  document.getElementById('new-pin-val').value = '';
-  document.getElementById('new-pin-confirm-val').value = '';
+  if(!requireAdmin(null, '修改 PIN 碼需要管理員權限')) return;
+  document.getElementById('change-pin-role').value         = 'manager';
+  document.getElementById('new-pin-val').value             = '';
+  document.getElementById('new-pin-confirm-val').value     = '';
   document.getElementById('pin-change-error').style.display = 'none';
-  document.getElementById('changePinModal').style.display = 'flex';
+  document.getElementById('changePinModal').style.display   = 'flex';
 }
 function closeChangePinModal(e){
-  if(!e || e.target===document.getElementById('changePinModal'))
+  if(!e || e.target === document.getElementById('changePinModal'))
     document.getElementById('changePinModal').style.display = 'none';
 }
 function submitChangePin(){
-  const role = document.getElementById('change-pin-role').value;
-  const nw   = document.getElementById('new-pin-val').value.trim();
-  const nwc  = document.getElementById('new-pin-confirm-val').value.trim();
-  const errEl= document.getElementById('pin-change-error');
+  const role   = document.getElementById('change-pin-role').value;
+  const nw     = document.getElementById('new-pin-val').value.trim();
+  const nwc    = document.getElementById('new-pin-confirm-val').value.trim();
+  const errEl  = document.getElementById('pin-change-error');
   const minLen = role === 'admin' ? 6 : 4;
-  if(nw.length < minLen){ errEl.textContent=`至少需要 ${minLen} 位數字`; errEl.style.display='block'; return; }
-  if(nw !== nwc){ errEl.textContent='兩次輸入不一致'; errEl.style.display='block'; return; }
+  if(nw.length < minLen){ errEl.textContent = `至少 ${minLen} 位`; errEl.style.display='block'; return; }
+  if(nw !== nwc)        { errEl.textContent = '兩次輸入不一致';     errEl.style.display='block'; return; }
   _pins[role] = nw;
-  if(role === 'manager') localStorage.setItem('erp_pin_manager', nw);
+  localStorage.setItem(`erp_pin_${role}`, nw);
   savePinsToFirebase();
   document.getElementById('changePinModal').style.display = 'none';
-  showToast(`✅ ${role==='admin'?'管理員':'主管'} PIN 已更新`);
+  showToast(`✅ ${role === 'admin' ? '管理員' : '主管'} PIN 已更新`);
 }
 
-// ── Enter 鍵 ──
-document.addEventListener('DOMContentLoaded', ()=>{
-  document.getElementById('login-pin-input')?.addEventListener('keydown', e=>{
-    if(e.key==='Enter') submitLoginPin();
+// ── 初始化：預設操作員，不需要登入 ──
+document.addEventListener('DOMContentLoaded', () => {
+  // 如果沒有 session，預設設為操作員
+  if(!getSession()) setSession('operator');
+  applyRoleUI();
+  loadPinsFromFirebase();
+
+  // Enter 鍵
+  document.getElementById('escalate-pin-input')?.addEventListener('keydown', e => {
+    if(e.key === 'Enter') submitEscalatePin();
   });
-  // 檢查是否已登入
-  if(getSession()){
-    hideLoginPage();
-    applyRoleUI();
-  } else {
-    showLoginPage();
-  }
 });
+

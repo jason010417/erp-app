@@ -1,1192 +1,540 @@
-<!-- 登入頁面 -->
-<div id="login-page" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:999;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
-  <div style="text-align:center;margin-bottom:32px;">
-    <i class="ti ti-building-factory-2" style="font-size:56px;color:#1D9E75;display:block;margin-bottom:12px;"></i>
-    <div style="font-size:24px;font-weight:700;color:var(--text);">工廠庫存管理系統</div>
-    <div style="font-size:14px;color:var(--text2);margin-top:6px;">請選擇登入角色</div>
-  </div>
-  <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px;">
-    <button class="login-role-btn operator" onclick="loginAs('operator')">
-      <i class="ti ti-hard-hat"></i>
-      <div><div class="lrb-title">操作員</div><div class="lrb-sub">進出貨・生產・POS收款</div></div>
-      <i class="ti ti-arrow-right"></i>
-    </button>
-    <button class="login-role-btn manager" onclick="loginAs('manager')">
-      <i class="ti ti-user-check"></i>
-      <div><div class="lrb-title">主管</div><div class="lrb-sub">後台管理・財務・審核上傳</div></div>
-      <i class="ti ti-lock" style="font-size:16px;"></i>
-    </button>
-    <button class="login-role-btn admin" onclick="loginAs('admin')">
-      <i class="ti ti-shield-check"></i>
-      <div><div class="lrb-title">管理員</div><div class="lrb-sub">最高權限・刪除・系統設定</div></div>
-      <i class="ti ti-lock" style="font-size:16px;"></i>
-    </button>
-  </div>
-</div>
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="工廠ERP" />
-  <meta name="theme-color" content="#1D9E75" />
-  <link rel="manifest" href="manifest.json" />
-  <title>工廠庫存管理系統</title>
-  <link rel="stylesheet" href="css/style.css" />
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-  <!-- Tabler Icons -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#1D9E75" />
+<title>庇護工場 ERP</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css" />
+<link rel="stylesheet" href="css/style.css" />
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
-<!-- ====== APP SHELL ====== -->
+<!-- 登入頁面已移除（方案B：預設操作員，右上角可提升權限）-->
+
+<!-- ════════════════════════════════════════════
+     主應用程式
+════════════════════════════════════════════ -->
 <div id="app">
 
   <!-- Header -->
-  <header class="header">
+  <header class="app-header">
     <div class="header-left">
-      <i class="ti ti-building-factory-2"></i>
-      <div>
-        <div class="header-title">工廠庫存管理</div>
-        <div class="header-sub" id="header-time">載入中...</div>
-      </div>
+      <i class="ti ti-building-factory-2" style="font-size:22px;color:var(--green);"></i>
+      <span class="header-title">庇護工場 ERP</span>
     </div>
-    <div class="header-right" style="display:flex;align-items:center;gap:6px;">
-      <div id="sync-status" onclick="manualSync()" title="點擊手動同步"
-        style="display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 8px;border-radius:20px;background:var(--bg);">
-        <i class="ti ti-cloud-off" style="color:#6B6B68;font-size:16px;"></i>
-        <span style="font-size:11px;color:#6B6B68;">離線模式</span>
+    <div class="header-right">
+      <div id="sync-status" onclick="manualSync()" class="sync-badge" title="點擊手動同步">
+        <i class="ti ti-cloud-off"></i>
+        <span>離線</span>
       </div>
-      <div id="header-role" style="font-size:11px;color:var(--text2);padding:3px 8px;background:var(--bg);border-radius:20px;cursor:pointer;" onclick="logout()"></div>
+      <div class="role-dropdown-wrap">
+        <button class="role-badge" id="header-role" onclick="toggleRoleMenu()"></button>
+        <div class="role-dropdown" id="role-dropdown" style="display:none;">
+          <div class="role-dropdown-current" id="role-dropdown-current"></div>
+          <div class="role-dropdown-divider"></div>
+          <button class="role-dropdown-item" onclick="escalateRole('manager')">
+            <i class="ti ti-user-check"></i> 切換為主管
+          </button>
+          <button class="role-dropdown-item" onclick="escalateRole('admin')">
+            <i class="ti ti-shield-check"></i> 切換為管理員
+          </button>
+          <button class="role-dropdown-item downgrade" onclick="downgradeToOperator()">
+            <i class="ti ti-hard-hat"></i> 切換回操作員
+          </button>
+        </div>
+      </div>
     </div>
   </header>
 
-  <!-- Main Content -->
+  <!-- 主內容 -->
   <main id="main-content">
 
-    <!-- ========== PAGE: HOME ========== -->
+    <!-- ══════════ 首頁（儀表板） ══════════ -->
     <div class="page active" id="page-home">
-
-      <!-- 庫存狀態 -->
-      <div class="stats-grid">
-        <div class="stat-card ok">
-          <div class="stat-num" id="stat-ok">—</div>
-          <div class="stat-label"><i class="ti ti-circle-check"></i> 庫存足夠</div>
-        </div>
-        <div class="stat-card warn">
-          <div class="stat-num" id="stat-low">—</div>
-          <div class="stat-label"><i class="ti ti-alert-triangle"></i> 數量偏少</div>
-        </div>
-        <div class="stat-card danger">
-          <div class="stat-num" id="stat-empty">—</div>
-          <div class="stat-label"><i class="ti ti-x"></i> 庫存不足</div>
-        </div>
-      </div>
-
-      <!-- 警示 -->
-      <div class="section-title"><i class="ti ti-bell"></i> 需要注意</div>
-      <div id="alerts-container"></div>
-
-      <!-- 模式選擇 -->
-      <div class="section-title" style="margin-top:20px;"><i class="ti ti-layout-grid"></i> 功能選單</div>
-
-      <!-- 工廠模式 -->
-      <div class="mode-block">
-        <div class="mode-block-title factory"><i class="ti ti-building-factory-2"></i> 工廠作業</div>
-        <div class="mode-grid">
-          <button class="mode-btn" onclick="showPage('purchase')">
-            <i class="ti ti-truck-loading"></i><span>進貨單</span>
-          </button>
-          <button class="mode-btn" onclick="showPage('prod')">
-            <i class="ti ti-player-play"></i><span>加工生產</span>
-          </button>
-          <button class="mode-btn" onclick="showPage('inventory')">
-            <i class="ti ti-clipboard-list"></i><span>庫存查詢</span>
-          </button>
-          <button class="mode-btn" onclick="showPage('history')">
-            <i class="ti ti-history"></i><span>作業記錄</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 銷售模式 -->
-      <div class="mode-block">
-        <div class="mode-block-title sales"><i class="ti ti-shopping-cart"></i> 銷售作業</div>
-        <div class="mode-grid">
-          <button class="mode-btn" onclick="showPage('pos')">
-            <i class="ti ti-cash-register"></i><span>POS收款</span>
-          </button>
-          <button class="mode-btn" onclick="showPage('shipment')">
-            <i class="ti ti-truck"></i><span>出貨單</span>
-          </button>
-          <button class="mode-btn" onclick="showPage('estimate')">
-            <i class="ti ti-file-invoice"></i><span>估價單</span>
-          </button>
-          <button class="mode-btn" onclick="showPage('customers')">
-            <i class="ti ti-users"></i><span>客戶資料</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 管理 -->
-      <div class="mode-block">
-        <div class="mode-block-title manage"><i class="ti ti-settings"></i> 管理查詢</div>
-        <div class="mode-grid">
-          <button class="mode-btn" onclick="showPage('sale-report')">
-            <i class="ti ti-chart-bar"></i><span>銷貨明細</span>
-          </button>
-          <button class="mode-btn" onclick="showPage('purchase-report')">
-            <i class="ti ti-chart-line"></i><span>進貨明細</span>
-          </button>
-          <button class="mode-btn" onclick="showPage('process-track')">
-            <i class="ti ti-list-check"></i><span>製程進度</span>
-          </button>
-          <button class="mode-btn" onclick="showPage('admin')">
-            <i class="ti ti-tool"></i><span>後台管理</span>
-          </button>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ========== PAGE: FINISHED ========== -->
-    <div class="page" id="page-finished">
       <div class="page-header">
-        <div class="page-title"><i class="ti ti-package"></i> 成品庫存</div>
-        <span class="badge">20 種</span>
-      </div>
-      <div class="search-bar">
-        <i class="ti ti-search"></i>
-        <input type="search" id="search-finished" placeholder="搜尋成品..." oninput="filterItems('finished',this.value)" />
-      </div>
-      <div class="action-grid two">
-        <button class="action-btn add" onclick="startOp('add','finished')"><i class="ti ti-plus"></i>加入</button>
-        <button class="action-btn ship" onclick="startOp('ship','finished')"><i class="ti ti-truck"></i>出貨</button>
-      </div>
-      <div class="product-grid" id="grid-finished"></div>
-    </div>
-
-    <!-- ========== PAGE: MATERIALS ========== -->
-    <div class="page" id="page-materials">
-      <div class="page-header">
-        <div class="page-title"><i class="ti ti-tools"></i> 材料庫存</div>
-        <span class="badge">200 種</span>
-      </div>
-      <div class="search-bar">
-        <i class="ti ti-search"></i>
-        <input type="search" id="search-materials" placeholder="搜尋材料..." oninput="filterItems('materials',this.value)" />
-      </div>
-      <div class="filter-tabs">
-        <button class="ftab active" id="ftab-all" onclick="filterByType('all')">全部</button>
-        <button class="ftab" id="ftab-semi" onclick="filterByType('semi')">半成品</button>
-        <button class="ftab" id="ftab-pack" onclick="filterByType('pack')">包材</button>
-      </div>
-      <div class="action-grid two">
-        <button class="action-btn add" onclick="startOp('add','materials')"><i class="ti ti-plus"></i>進貨</button>
-        <button class="action-btn take" onclick="startOp('take','materials')"><i class="ti ti-minus"></i>領料</button>
-      </div>
-      <div class="product-grid" id="grid-materials"></div>
-    </div>
-
-    <!-- ========== PAGE: HISTORY ========== -->
-    <div class="page" id="page-history">
-      <div class="page-header">
-        <div class="page-title"><i class="ti ti-history"></i> 操作記錄</div>
-        <button class="small-btn" onclick="exportCSV()"><i class="ti ti-download"></i> 匯出</button>
-      </div>
-      <div class="est-filter-row" style="margin-bottom:10px;">
-        <button class="ftab active" id="hf-all"      onclick="setHistoryFilter('all')">全部</button>
-        <button class="ftab"        id="hf-purchase" onclick="setHistoryFilter('purchase')">進貨</button>
-        <button class="ftab"        id="hf-sale"     onclick="setHistoryFilter('sale')">出貨/銷售</button>
-        <button class="ftab"        id="hf-prod"     onclick="setHistoryFilter('prod')">生產</button>
-      </div>
-      <div class="log-list" id="log-list"></div>
-    </div>
-
-    <!-- ========== PAGE: OPERATION (掃碼+數字鍵盤) ========== -->
-    <div class="page" id="page-op">
-      <div class="op-header">
-        <button class="back-btn" onclick="cancelOp()"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title" id="op-title">加入庫存</div>
-      </div>
-
-      <!-- 步驟指示 -->
-      <div class="step-bar">
-        <div class="step-item active" id="op-s1"><i class="ti ti-barcode"></i><span>掃碼</span></div>
-        <div class="step-arrow">›</div>
-        <div class="step-item" id="op-s2"><i class="ti ti-123"></i><span>數量</span></div>
-        <div class="step-arrow">›</div>
-        <div class="step-item" id="op-s3"><i class="ti ti-check"></i><span>確認</span></div>
-      </div>
-
-      <!-- 步驟1: 掃碼 -->
-      <div id="op-step1">
-        <div class="scan-box" id="scanBox" onclick="toggleScan()">
-          <div class="scan-frame" id="scanFrame">
-            <video id="scanVideo" playsinline autoplay muted style="display:none;"></video>
-            <canvas id="scanCanvas" style="display:none;"></canvas>
-            <div class="scan-placeholder" id="scanPlaceholder">
-              <i class="ti ti-scan" style="font-size:56px;"></i>
-              <div class="scan-label">點此掃描條碼</div>
-              <div class="scan-sub">相機掃描 或 手動輸入</div>
-            </div>
-            <div class="scan-line" id="scanLine"></div>
-            <div class="scan-corners"></div>
-          </div>
+        <div class="page-title">
+          <i class="ti ti-layout-dashboard"></i> 首頁
         </div>
-
-        <div class="manual-row">
-          <input type="text" id="barcodeInput" placeholder="手動輸入條碼..." maxlength="30"
-            oninput="onBarcodeType(this.value)" onkeydown="if(event.key==='Enter')doLookup()" />
-          <button class="lookup-btn" onclick="doLookup()"><i class="ti ti-search"></i></button>
-        </div>
-
-        <div class="demo-section">
-          <div class="demo-label">範例條碼：</div>
-          <div class="demo-btns" id="demo-btns"></div>
-        </div>
-
-        <div class="item-result" id="itemFound" style="display:none;">
-          <div class="item-emoji" id="foundEmoji">📦</div>
-          <div class="item-info">
-            <div class="item-name" id="foundName"></div>
-            <div class="item-code" id="foundCode"></div>
-            <div class="item-stock">目前庫存：<strong id="foundQty"></strong> 個</div>
-          </div>
-          <i class="ti ti-circle-check" style="font-size:36px;color:#1D9E75;"></i>
-        </div>
-        <div class="item-error" id="notFound" style="display:none;">
-          <i class="ti ti-alert-circle"></i> 找不到此條碼，請確認後重試
-        </div>
-
-        <button class="next-btn" id="btn-to-step2" onclick="goStep(2)" disabled>
-          下一步 <i class="ti ti-arrow-right"></i>
+      </div>
+      <!-- 庫存警示 -->
+      <div class="section-title"><i class="ti ti-alert-triangle"></i> 庫存警示</div>
+      <div id="inventory-summary"></div>
+      <!-- 待處理訂單 -->
+      <div class="section-title" style="margin-top:14px;"><i class="ti ti-clock"></i> 待處理訂單</div>
+      <div id="home-pending-orders"></div>
+      <!-- 今日銷售 -->
+      <div class="section-title" style="margin-top:14px;"><i class="ti ti-chart-bar"></i> 今日銷售</div>
+      <div id="home-today-sales"></div>
+      <!-- 快速操作 -->
+      <div class="section-title" style="margin-top:14px;"><i class="ti ti-bolt"></i> 快速操作</div>
+      <div class="quick-grid">
+        <button class="quick-btn" onclick="showPage('pos-a')">
+          <i class="ti ti-cash-register"></i>
+          <span>A 門市 POS</span>
         </button>
-      </div>
-
-      <!-- 步驟2: 數字鍵盤 -->
-      <div id="op-step2" style="display:none;">
-        <div class="qty-display">
-          <div class="qty-label">輸入數量</div>
-          <div class="qty-value" id="qtyDisplay">0</div>
-          <div class="qty-unit">個</div>
-        </div>
-        <div class="numpad">
-          <button class="nk" onclick="numPress('1')">1</button>
-          <button class="nk" onclick="numPress('2')">2</button>
-          <button class="nk" onclick="numPress('3')">3</button>
-          <button class="nk" onclick="numPress('4')">4</button>
-          <button class="nk" onclick="numPress('5')">5</button>
-          <button class="nk" onclick="numPress('6')">6</button>
-          <button class="nk" onclick="numPress('7')">7</button>
-          <button class="nk" onclick="numPress('8')">8</button>
-          <button class="nk" onclick="numPress('9')">9</button>
-          <button class="nk nk-del" onclick="numPress('del')"><i class="ti ti-backspace"></i></button>
-          <button class="nk" onclick="numPress('0')">0</button>
-          <button class="nk" onclick="numPress('00')">00</button>
-          <button class="nk nk-next" onclick="goStep(3)">
-            下一步 <i class="ti ti-arrow-right"></i>
-          </button>
-        </div>
-      </div>
-
-      <!-- 步驟3: 確認 -->
-      <div id="op-step3" style="display:none;">
-        <div class="confirm-card">
-          <div class="confirm-row"><span class="clabel">操作</span><span class="cval" id="c-op"></span></div>
-          <div class="confirm-row"><span class="clabel">品項</span><span class="cval" id="c-item"></span></div>
-          <div class="confirm-row"><span class="clabel">條碼</span><span class="cval mono" id="c-barcode"></span></div>
-          <div class="confirm-row last"><span class="clabel">數量</span><span class="cval big" id="c-qty"></span></div>
-        </div>
-        <button class="confirm-btn" onclick="doConfirm()">
-          <i class="ti ti-check"></i> 確認送出！
+        <button class="quick-btn" onclick="showPage('purchase')">
+          <i class="ti ti-truck-loading"></i>
+          <span>進貨</span>
         </button>
-        <button class="redit-btn" onclick="goStep(1)">
-          <i class="ti ti-edit"></i> 重新輸入
+        <button class="quick-btn" onclick="showPage('production')">
+          <i class="ti ti-player-play"></i>
+          <span>生產</span>
+        </button>
+        <button class="quick-btn" onclick="showPage('orders')">
+          <i class="ti ti-receipt-2"></i>
+          <span>訂單</span>
         </button>
       </div>
     </div>
 
-    <!-- ========== PAGE: 進貨單 ========== -->
-    <div class="page" id="page-purchase">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('home')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-truck-loading" style="color:#1D9E75;"></i> 進貨單</div>
+    <!-- ══════════ 銷售作業選單 ══════════ -->
+    <div class="page" id="page-sales-menu">
+      <div class="page-header">
+        <div class="page-title"><i class="ti ti-shopping-cart"></i> 銷售作業</div>
       </div>
-
-      <!-- 廠商選擇 -->
-      <div class="supplier-section">
-        <div class="supplier-label"><i class="ti ti-building-store"></i> 選擇廠商</div>
-        <div class="supplier-selected" id="purchaseSupplierDisplay" onclick="openSupplierPicker()">
-          <span id="purchaseSupplierName">請選擇廠商 ▾</span>
-        </div>
-        <div class="supplier-info" id="purchaseSupplierInfo" style="display:none;">
-          <div id="purchaseSupplierDetail"></div>
-          <button class="supplier-call-btn" id="purchaseSupplierCallBtn" onclick="callSupplier()" style="display:none;">
-            <i class="ti ti-phone"></i> 撥打電話
-          </button>
-        </div>
+      <div class="submenu-grid">
+        <button class="submenu-btn amber" onclick="showPage('pos-a')">
+          <i class="ti ti-cash-register"></i>
+          <span class="sb-name">A 門市 POS</span>
+          <span class="sb-sub">現場收款</span>
+        </button>
+        <button class="submenu-btn amber" onclick="showPage('store-b-sales')">
+          <i class="ti ti-store"></i>
+          <span class="sb-name">B 門市銷售</span>
+          <span class="sb-sub">每日輸入</span>
+        </button>
+        <button class="submenu-btn purple" onclick="showPage('estimates')">
+          <i class="ti ti-file-description"></i>
+          <span class="sb-name">估價單</span>
+          <span class="sb-sub">純報價</span>
+        </button>
+        <button class="submenu-btn purple" onclick="showPage('orders')">
+          <i class="ti ti-receipt-2"></i>
+          <span class="sb-name">正式訂單</span>
+          <span class="sb-sub">接單管理</span>
+        </button>
+        <button class="submenu-btn purple" onclick="showPage('events')">
+          <i class="ti ti-map-pin"></i>
+          <span class="sb-name">外展活動</span>
+          <span class="sb-sub">展覽管理</span>
+        </button>
+        <button class="submenu-btn teal" onclick="showPage('customers')">
+          <i class="ti ti-users"></i>
+          <span class="sb-name">客戶管理</span>
+          <span class="sb-sub">聯絡資料</span>
+        </button>
+        <button class="submenu-btn gray" onclick="showPage('sale-report')">
+          <i class="ti ti-chart-bar"></i>
+          <span class="sb-name">銷貨明細</span>
+          <span class="sb-sub">查詢記錄</span>
+        </button>
+        <button class="submenu-btn gray" onclick="showPage('gift-orders')">
+          <i class="ti ti-gift"></i>
+          <span class="sb-name">贈品出庫</span>
+          <span class="sb-sub">贈品/試吃</span>
+        </button>
       </div>
-
-      <!-- 廠商選擇 Modal -->
-      <div class="modal-overlay" id="supplierModal" style="display:none;" onclick="closeSupplierPicker(event)">
-        <div class="supplier-modal">
-          <div class="supplier-modal-title"><i class="ti ti-building-store"></i> 選擇廠商</div>
-          <div class="supplier-search-row">
-            <i class="ti ti-search"></i>
-            <input type="search" id="supplierSearch" placeholder="搜尋廠商名稱..." oninput="filterSuppliers(this.value)" />
-          </div>
-          <div class="supplier-list" id="supplierList"></div>
-        </div>
-      </div>
-
-      <!-- 掃碼區 -->
-      <div class="order-scan-section">
-        <div class="scan-box" id="purchaseScanBox" onclick="toggleOrderScan('purchase')">
-          <div class="scan-frame" id="purchaseScanFrame">
-            <video id="purchaseScanVideo" playsinline autoplay muted style="display:none;"></video>
-            <canvas id="purchaseScanCanvas" style="display:none;"></canvas>
-            <div class="scan-placeholder" id="purchaseScanPlaceholder">
-              <i class="ti ti-scan" style="font-size:44px;"></i>
-              <div class="scan-label">掃描條碼加入進貨單</div>
-            </div>
-            <div class="scan-line" id="purchaseScanLine"></div>
-            <div class="scan-corners"></div>
-          </div>
-        </div>
-        <div class="manual-row">
-          <input type="text" id="purchaseBarcodeInput" placeholder="手動輸入條碼..."
-            oninput="orderBarcodeType('purchase',this.value)"
-            onkeydown="if(event.key==='Enter')orderLookup('purchase')" />
-          <button class="lookup-btn" onclick="orderLookup('purchase')"><i class="ti ti-search"></i></button>
-        </div>
-        <div class="item-result" id="purchaseItemFound" style="display:none;">
-          <div class="item-emoji" id="purchaseFoundEmoji">📦</div>
-          <div class="item-info">
-            <div class="item-name" id="purchaseFoundName"></div>
-            <div class="item-stock">目前庫存：<strong id="purchaseFoundQty"></strong> 個</div>
-          </div>
-        </div>
-        <div class="item-error" id="purchaseNotFound" style="display:none;">
-          <i class="ti ti-alert-circle"></i> 找不到此條碼
-        </div>
-        <!-- 數字鍵盤（內嵌） -->
-        <div id="purchaseNumSection" style="display:none;">
-          <div class="qty-display compact">
-            <div class="qty-label">進貨數量</div>
-            <div class="qty-value" id="purchaseQtyDisplay">0</div>
-            <div class="qty-unit">個</div>
-          </div>
-          <div class="numpad compact">
-            <button class="nk" onclick="orderNumPress('purchase','1')">1</button>
-            <button class="nk" onclick="orderNumPress('purchase','2')">2</button>
-            <button class="nk" onclick="orderNumPress('purchase','3')">3</button>
-            <button class="nk" onclick="orderNumPress('purchase','4')">4</button>
-            <button class="nk" onclick="orderNumPress('purchase','5')">5</button>
-            <button class="nk" onclick="orderNumPress('purchase','6')">6</button>
-            <button class="nk" onclick="orderNumPress('purchase','7')">7</button>
-            <button class="nk" onclick="orderNumPress('purchase','8')">8</button>
-            <button class="nk" onclick="orderNumPress('purchase','9')">9</button>
-            <button class="nk nk-del" onclick="orderNumPress('purchase','del')"><i class="ti ti-backspace"></i></button>
-            <button class="nk" onclick="orderNumPress('purchase','0')">0</button>
-            <button class="nk" onclick="orderNumPress('purchase','00')">00</button>
-            <button class="nk nk-add-item" onclick="addToOrder('purchase')">
-              <i class="ti ti-plus"></i> 加入清單
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 進貨清單 -->
-      <div class="order-list-header">
-        <span class="order-list-title"><i class="ti ti-list"></i> 進貨清單</span>
-        <span class="order-count" id="purchaseCount">0 項</span>
-      </div>
-      <div class="order-list" id="purchaseList">
-        <div class="order-empty">還沒有品項，請掃描條碼加入</div>
-      </div>
-      <div class="order-total-row">
-        合計 <strong id="purchaseTotal">0</strong> 種品項，共 <strong id="purchaseTotalQty">0</strong> 個
-      </div>
-      <button class="confirm-btn" id="purchaseConfirmBtn" onclick="submitOrder('purchase')" disabled>
-        <i class="ti ti-check"></i> 確認全部進貨！
-      </button>
-      <button class="redit-btn" onclick="clearOrder('purchase')">
-        <i class="ti ti-trash"></i> 清空清單
-      </button>
     </div>
 
-    <!-- ========== PAGE: 出貨單 ========== -->
-    <div class="page" id="page-shipment">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('home')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-truck" style="color:#BA7517;"></i> 出貨單</div>
+    <!-- ══════════ 工廠作業選單 ══════════ -->
+    <div class="page" id="page-factory-menu">
+      <div class="page-header">
+        <div class="page-title"><i class="ti ti-building-factory-2"></i> 工廠作業</div>
       </div>
-
-      <div class="order-scan-section">
-        <div class="scan-box" id="shipmentScanBox" onclick="toggleOrderScan('shipment')">
-          <div class="scan-frame" id="shipmentScanFrame">
-            <video id="shipmentScanVideo" playsinline autoplay muted style="display:none;"></video>
-            <canvas id="shipmentScanCanvas" style="display:none;"></canvas>
-            <div class="scan-placeholder" id="shipmentScanPlaceholder">
-              <i class="ti ti-scan" style="font-size:44px;"></i>
-              <div class="scan-label">掃描條碼加入出貨單</div>
-            </div>
-            <div class="scan-line" id="shipmentScanLine"></div>
-            <div class="scan-corners"></div>
-          </div>
-        </div>
-        <div class="manual-row">
-          <input type="text" id="shipmentBarcodeInput" placeholder="手動輸入條碼..."
-            oninput="orderBarcodeType('shipment',this.value)"
-            onkeydown="if(event.key==='Enter')orderLookup('shipment')" />
-          <button class="lookup-btn" onclick="orderLookup('shipment')"><i class="ti ti-search"></i></button>
-        </div>
-        <div class="item-result" id="shipmentItemFound" style="display:none;">
-          <div class="item-emoji" id="shipmentFoundEmoji">📦</div>
-          <div class="item-info">
-            <div class="item-name" id="shipmentFoundName"></div>
-            <div class="item-stock">目前庫存：<strong id="shipmentFoundQty"></strong> 個</div>
-          </div>
-        </div>
-        <div class="item-error" id="shipmentNotFound" style="display:none;">
-          <i class="ti ti-alert-circle"></i> 找不到此條碼
-        </div>
-        <div id="shipmentNumSection" style="display:none;">
-          <div class="qty-display compact">
-            <div class="qty-label">出貨數量</div>
-            <div class="qty-value" id="shipmentQtyDisplay">0</div>
-            <div class="qty-unit">個</div>
-          </div>
-          <div class="numpad compact">
-            <button class="nk" onclick="orderNumPress('shipment','1')">1</button>
-            <button class="nk" onclick="orderNumPress('shipment','2')">2</button>
-            <button class="nk" onclick="orderNumPress('shipment','3')">3</button>
-            <button class="nk" onclick="orderNumPress('shipment','4')">4</button>
-            <button class="nk" onclick="orderNumPress('shipment','5')">5</button>
-            <button class="nk" onclick="orderNumPress('shipment','6')">6</button>
-            <button class="nk" onclick="orderNumPress('shipment','7')">7</button>
-            <button class="nk" onclick="orderNumPress('shipment','8')">8</button>
-            <button class="nk" onclick="orderNumPress('shipment','9')">9</button>
-            <button class="nk nk-del" onclick="orderNumPress('shipment','del')"><i class="ti ti-backspace"></i></button>
-            <button class="nk" onclick="orderNumPress('shipment','0')">0</button>
-            <button class="nk" onclick="orderNumPress('shipment','00')">00</button>
-            <button class="nk nk-add-item" onclick="addToOrder('shipment')">
-              <i class="ti ti-plus"></i> 加入清單
-            </button>
-          </div>
-        </div>
+      <div class="submenu-grid">
+        <button class="submenu-btn teal" onclick="showPage('purchase')">
+          <i class="ti ti-truck-loading"></i>
+          <span class="sb-name">進貨單</span>
+          <span class="sb-sub">入庫作業</span>
+        </button>
+        <button class="submenu-btn teal" onclick="showPage('production')">
+          <i class="ti ti-player-play"></i>
+          <span class="sb-name">生產管理</span>
+          <span class="sb-sub">加工生產</span>
+        </button>
+        <button class="submenu-btn teal" onclick="showPage('transfer')">
+          <i class="ti ti-arrows-right-left"></i>
+          <span class="sb-name">調貨單</span>
+          <span class="sb-sub">A → B 門市</span>
+        </button>
+        <button class="submenu-btn gray" onclick="showPage('purchase-report')">
+          <i class="ti ti-chart-line"></i>
+          <span class="sb-name">進貨明細</span>
+          <span class="sb-sub">查詢記錄</span>
+        </button>
       </div>
-
-      <div class="order-list-header">
-        <span class="order-list-title"><i class="ti ti-list"></i> 出貨清單</span>
-        <span class="order-count" id="shipmentCount">0 項</span>
-      </div>
-      <div class="order-list" id="shipmentList">
-        <div class="order-empty">還沒有品項，請掃描條碼加入</div>
-      </div>
-      <div class="order-total-row">
-        合計 <strong id="shipmentTotal">0</strong> 種品項，共 <strong id="shipmentTotalQty">0</strong> 個
-      </div>
-      <button class="confirm-btn ship-btn" id="shipmentConfirmBtn" onclick="submitOrder('shipment')" disabled>
-        <i class="ti ti-check"></i> 確認全部出貨！
-      </button>
-      <button class="redit-btn" onclick="clearOrder('shipment')">
-        <i class="ti ti-trash"></i> 清空清單
-      </button>
     </div>
 
-    <!-- ========== PAGE: 查看庫存 ========== -->
+    <!-- ══════════ 庫存查詢 ══════════ -->
     <div class="page" id="page-inventory">
       <div class="page-header">
-        <div class="page-title"><i class="ti ti-clipboard-list"></i> 查看庫存</div>
+        <div class="page-title"><i class="ti ti-packages"></i> 庫存查詢</div>
       </div>
-      <!-- 掃碼查詢 -->
-      <div class="scan-box" id="invScanBox" onclick="toggleInvScan()" style="margin-bottom:10px;">
-        <div class="scan-frame">
-          <video id="invScanVideo" playsinline autoplay muted style="display:none;"></video>
-          <canvas id="invScanCanvas" style="display:none;"></canvas>
-          <div class="scan-placeholder" id="invScanPlaceholder">
-            <i class="ti ti-scan" style="font-size:44px;"></i>
-            <div class="scan-label">掃描條碼查詢庫存</div>
-          </div>
-          <div class="scan-line" id="invScanLine"></div>
-          <div class="scan-corners"></div>
-        </div>
-      </div>
-      <div class="manual-row" style="margin-bottom:10px;">
-        <input type="text" id="invBarcodeInput" placeholder="手動輸入條碼查詢..."
-          onkeydown="if(event.key==='Enter')invLookup()" />
-        <button class="lookup-btn" onclick="invLookup()"><i class="ti ti-search"></i></button>
-      </div>
-      <!-- 查詢結果 -->
-      <div class="inv-result-card" id="invResultCard" style="display:none;">
-        <div class="inv-result-top">
-          <div class="inv-emoji" id="invEmoji">📦</div>
-          <div class="inv-info">
-            <div class="inv-name" id="invName"></div>
-            <div class="inv-id" id="invId"></div>
-            <div class="inv-cat" id="invCat"></div>
-          </div>
-        </div>
-        <div class="inv-qty-row">
-          <div class="inv-qty-box">
-            <div class="inv-qty-num" id="invQtyNum">0</div>
-            <div class="inv-qty-label">目前庫存</div>
-          </div>
-          <div class="inv-qty-box">
-            <div class="inv-qty-num inv-min" id="invMinNum">0</div>
-            <div class="inv-qty-label">安全庫存</div>
-          </div>
-          <div class="inv-qty-box">
-            <div class="inv-status" id="invStatus"></div>
-            <div class="inv-qty-label">狀態</div>
-          </div>
-        </div>
-        <div class="inv-actions">
-          <button class="inv-act-btn add" onclick="quickAdd()"><i class="ti ti-plus"></i> 加入庫存</button>
-          <button class="inv-act-btn ship" onclick="quickShip()"><i class="ti ti-truck"></i> 出貨</button>
-        </div>
-      </div>
-      <div class="item-error" id="invNotFound" style="display:none;">
-        <i class="ti ti-alert-circle"></i> 找不到此條碼
-      </div>
-
-      <!-- 分類瀏覽 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-layout-grid"></i> 分類瀏覽</div>
-      <div class="cat-grid" id="catGrid"></div>
-    </div>
-
-    <!-- ========== PAGE: 分類品項明細 ========== -->
-    <div class="page" id="page-catdetail">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('inventory')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title" id="catdetail-title">品項清單</div>
-        <span class="badge" id="catdetail-badge">0種</span>
-      </div>
-      <div class="search-bar" style="margin-bottom:10px;">
+      <!-- 地點切換 -->
+      <div class="loc-tabs" id="loc-tabs"></div>
+      <!-- 搜尋 -->
+      <div class="search-bar">
         <i class="ti ti-search"></i>
-        <input type="search" id="catdetail-search" placeholder="搜尋品名..." oninput="filterCatDetail(this.value)" />
+        <input type="search" id="inv-search"
+          placeholder="搜尋商品名稱或編號..."
+          oninput="renderInventoryPage()" />
       </div>
-      <div class="catdetail-sort">
-        <button class="sort-btn active" id="sort-default" onclick="sortCatDetail('default')">預設</button>
-        <button class="sort-btn" id="sort-low" onclick="sortCatDetail('low')">⚠️ 庫存少</button>
-        <button class="sort-btn" id="sort-name" onclick="sortCatDetail('name')">名稱</button>
-      </div>
-      <div id="catdetail-list"></div>
+      <!-- 分類篩選 -->
+      <div class="cat-filter" id="cat-filter"></div>
+      <!-- 清單 -->
+      <div id="inventory-list"></div>
     </div>
 
-    <!-- ========== PAGE: POS 收款 ========== -->
-    <div class="page" id="page-pos">
-      <div class="op-header">
-        <button class="back-btn" onclick="posBack()"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title" id="pos-title"><i class="ti ti-cash-register" style="color:#BA7517;"></i> POS 收款</div>
-        <button class="small-btn" onclick="clearPOS()"><i class="ti ti-trash"></i> 清空</button>
-      </div>
-      <!-- 外展模式 banner -->
-      <div id="event-pos-banner" style="display:none;">
-        <div class="event-banner" onclick="showPage('event-detail-' + currentEventId)">
-          <i class="ti ti-map-pin"></i>
-          <span id="event-banner-name">外展活動</span>
-          <span id="event-banner-day" class="event-banner-day"></span>
-          <i class="ti ti-chevron-right" style="margin-left:auto;"></i>
-        </div>
-        <!-- 外展商品快捷按鈕 -->
-        <div class="event-quick-label">外展商品</div>
-        <div class="event-quick-grid" id="eventQuickGrid"></div>
-      </div>
-      <div class="pos-scan-row">
-        <div class="scan-box pos-scanbox" id="posScanBox" onclick="togglePosScan()">
-          <div class="scan-frame" style="min-height:100px;">
-            <video id="posScanVideo" playsinline autoplay muted style="display:none;"></video>
-            <canvas id="posScanCanvas" style="display:none;"></canvas>
-            <div class="scan-placeholder" id="posScanPlaceholder" style="padding:16px;">
-              <i class="ti ti-scan" style="font-size:36px;"></i>
-              <div class="scan-label" style="font-size:14px;">掃描條碼</div>
-            </div>
-            <div class="scan-line" id="posScanLine"></div>
-          </div>
-        </div>
-        <div class="pos-search-col">
-          <div class="search-bar" style="margin-bottom:8px;">
-            <i class="ti ti-search"></i>
-            <input type="search" id="posSearch" placeholder="搜尋商品..." oninput="posSearchItems(this.value)" />
-          </div>
-          <div id="posSearchResult" style="display:none;"></div>
-        </div>
-      </div>
-      <div class="pos-cart-header">
-        <span class="order-list-title"><i class="ti ti-shopping-cart"></i> 購物車</span>
-        <span class="order-count" id="posCartCount">0 項</span>
-      </div>
-      <div class="pos-cart" id="posCart">
-        <div class="order-empty">還沒有商品，請掃碼或搜尋加入</div>
-      </div>
-      <div class="pos-total-section">
-        <div class="pos-total-row"><span>小計</span><span id="posSubtotal">$0</span></div>
-        <div class="pos-total-row discount-row">
-          <span>折扣</span>
-          <div class="discount-ctrl">
-            <button onclick="changeDiscount(-10)">−10%</button>
-            <span id="posDiscountLabel">0%</span>
-            <button onclick="changeDiscount(10)">+10%</button>
-          </div>
-        </div>
-        <div class="pos-total-row pos-grand">
-          <span>應付總金額</span><span id="posTotal" class="pos-total-num">$0</span>
-        </div>
-      </div>
-      <div class="pay-methods">
-        <button class="pay-btn active" id="pay-cash" onclick="selectPay('cash')"><i class="ti ti-cash"></i>現金</button>
-        <button class="pay-btn" id="pay-card" onclick="selectPay('card')"><i class="ti ti-credit-card"></i>刷卡</button>
-        <button class="pay-btn" id="pay-transfer" onclick="selectPay('transfer')"><i class="ti ti-building-bank"></i>轉帳</button>
-        <button class="pay-btn" id="pay-line" onclick="selectPay('line')"><i class="ti ti-brand-line"></i>Line Pay</button>
-      </div>
-      <div id="cashSection" style="margin-bottom:10px;">
-        <div class="cash-label">收取現金</div>
-        <div class="cash-numpad-display">
-          <span class="cash-prefix">$</span><span class="cash-value" id="cashDisplay">0</span>
-        </div>
-        <div class="numpad compact">
-          <button class="nk" onclick="cashPress('1')">1</button>
-          <button class="nk" onclick="cashPress('2')">2</button>
-          <button class="nk" onclick="cashPress('3')">3</button>
-          <button class="nk" onclick="cashPress('4')">4</button>
-          <button class="nk" onclick="cashPress('5')">5</button>
-          <button class="nk" onclick="cashPress('6')">6</button>
-          <button class="nk" onclick="cashPress('7')">7</button>
-          <button class="nk" onclick="cashPress('8')">8</button>
-          <button class="nk" onclick="cashPress('9')">9</button>
-          <button class="nk nk-del" onclick="cashPress('del')"><i class="ti ti-backspace"></i></button>
-          <button class="nk" onclick="cashPress('0')">0</button>
-          <button class="nk" onclick="cashPress('00')">00</button>
-        </div>
-        <div class="change-row" id="changeRow" style="display:none;">
-          找零：<strong id="changeAmt" style="font-size:24px;color:#1D9E75;">$0</strong>
-        </div>
-      </div>
-      <button class="confirm-btn pos-confirm" id="posConfirmBtn" onclick="confirmPOS()">
-        <i class="ti ti-check"></i> 完成收款！
-      </button>
-    </div>
-
-    <!-- ========== PAGE: 收款完成收據 ========== -->
-    <div class="page" id="page-receipt">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('pos')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-receipt" style="color:#1D9E75;"></i> 收據</div>
-      </div>
-      <div class="receipt-card" id="receiptCard"></div>
-      <button class="confirm-btn" onclick="newSale()" style="margin-top:12px;">
-        <i class="ti ti-plus"></i> 繼續下一筆
-      </button>
-      <button class="redit-btn" onclick="showPage('history')">
-        <i class="ti ti-history"></i> 查看記錄
-      </button>
-    </div>
-
-    <!-- ========== PAGE: 加工生產單 ========== -->
-    <div class="page" id="page-prod">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('home')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-player-play" style="color:#185FA5;"></i> 加工生產單</div>
-      </div>
-
-      <div class="panel-hint">掃描成品條碼 → 輸入生產數量 → 系統自動扣除材料</div>
-
-      <div class="scan-box" id="prodScanBox" onclick="toggleProdScan()">
-        <div class="scan-frame">
-          <video id="prodScanVideo" playsinline autoplay muted style="display:none;"></video>
-          <canvas id="prodScanCanvas" style="display:none;"></canvas>
-          <div class="scan-placeholder" id="prodScanPlaceholder">
-            <i class="ti ti-scan" style="font-size:44px;"></i>
-            <div class="scan-label">掃描成品條碼</div>
-          </div>
-          <div class="scan-line" id="prodScanLine"></div>
-          <div class="scan-corners"></div>
-        </div>
-      </div>
-      <div class="manual-row">
-        <input type="text" id="prodBarcodeInput" placeholder="手動輸入成品條碼..."
-          oninput="prodBarcodeType(this.value)"
-          onkeydown="if(event.key==='Enter')prodLookup()" />
-        <button class="lookup-btn" onclick="prodLookup()"><i class="ti ti-search"></i></button>
-      </div>
-
-      <div class="item-result" id="prodItemFound" style="display:none;">
-        <div class="item-emoji" id="prodFoundEmoji">📦</div>
-        <div class="item-info">
-          <div class="item-name" id="prodFoundName"></div>
-          <div class="item-stock">目前庫存：<strong id="prodFoundQty"></strong> 個</div>
-        </div>
-      </div>
-      <div class="item-error" id="prodNotFound" style="display:none;">
-        <i class="ti ti-alert-circle"></i> 找不到此條碼
-      </div>
-
-      <!-- 生產數量 -->
-      <div class="qty-display compact" style="margin-top:10px;">
-        <div class="qty-label">生產數量</div>
-        <div class="qty-value" id="prodQtyDisplay">0</div>
-        <div class="qty-unit">個</div>
-      </div>
-      <div class="numpad compact">
-        <button class="nk" onclick="prodNumPress('1')">1</button>
-        <button class="nk" onclick="prodNumPress('2')">2</button>
-        <button class="nk" onclick="prodNumPress('3')">3</button>
-        <button class="nk" onclick="prodNumPress('4')">4</button>
-        <button class="nk" onclick="prodNumPress('5')">5</button>
-        <button class="nk" onclick="prodNumPress('6')">6</button>
-        <button class="nk" onclick="prodNumPress('7')">7</button>
-        <button class="nk" onclick="prodNumPress('8')">8</button>
-        <button class="nk" onclick="prodNumPress('9')">9</button>
-        <button class="nk nk-del" onclick="prodNumPress('del')"><i class="ti ti-backspace"></i></button>
-        <button class="nk" onclick="prodNumPress('0')">0</button>
-        <button class="nk" onclick="prodNumPress('00')">00</button>
-      </div>
-
-      <!-- BOM 材料清單 -->
-      <div id="prodBomSection" style="display:none;margin-top:12px;">
-        <div class="order-list-header">
-          <span class="order-list-title"><i class="ti ti-list-check"></i> 需要的材料</span>
-          <span style="font-size:12px;color:var(--text3);">✅ 足夠　⚠️ 不足</span>
-        </div>
-        <div class="bom-list" id="bomList"></div>
-      </div>
-
-      <button class="confirm-btn prod-confirm-btn" onclick="confirmProd()" style="margin-top:12px;">
-        <i class="ti ti-player-play"></i> 確認開始生產！
-      </button>
-    </div>
-
-
-    <!-- ========== PAGE: 估價單列表 ========== -->
-    <div class="page" id="page-estimate">
+    <!-- ══════════ 估價單（列表）══════════ -->
+    <div class="page" id="page-estimates">
       <div class="op-header">
         <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-file-invoice" style="color:#185FA5;"></i> 估價單</div>
+        <div class="op-title"><i class="ti ti-file-description" style="color:#6B4FBB;"></i> 估價單</div>
         <button class="small-btn green-btn" onclick="newEstimate()"><i class="ti ti-plus"></i> 新增</button>
       </div>
-      <!-- 篩選 -->
-      <div class="est-filter-row">
-        <button class="ftab active" id="ef-all"    onclick="filterEstimates('all')">全部</button>
-        <button class="ftab"        id="ef-proc"   onclick="filterEstimates('proc')">生產中</button>
-        <button class="ftab"        id="ef-done"   onclick="filterEstimates('done')">已完成</button>
-        <button class="ftab"        id="ef-cancel" onclick="filterEstimates('cancel')">已取消</button>
-        <button class="ftab"        id="ef-draft"  onclick="filterEstimates('draft')">草稿</button>
+      <div class="filter-tabs" id="estimate-filter-tabs">
+        <button class="ftab active" onclick="renderEstimateList('all')">全部</button>
+        <button class="ftab" onclick="renderEstimateList('draft')">草稿</button>
+        <button class="ftab" onclick="renderEstimateList('pending')">待確認</button>
+        <button class="ftab" onclick="renderEstimateList('converted')">已轉單</button>
+        <button class="ftab" onclick="renderEstimateList('cancelled')">已取消</button>
       </div>
-      <div id="estimate-list"><div class="order-empty" style="padding:30px;text-align:center;color:var(--text3);">還沒有估價單<br>點右上角「新增」開始建立</div></div>
+      <div id="estimate-list"></div>
     </div>
 
-    <!-- ========== PAGE: 新增/編輯估價單 ========== -->
+    <!-- ══════════ 估價單（編輯）══════════ -->
     <div class="page" id="page-estimate-edit">
       <div class="op-header">
-        <button class="back-btn" onclick="showPage('estimate')"><i class="ti ti-arrow-left"></i></button>
+        <button class="back-btn" onclick="showPage('estimates')"><i class="ti ti-arrow-left"></i></button>
         <div class="op-title" id="est-edit-title">新增估價單</div>
-        <button class="small-btn green-btn" onclick="previewEstimate()"><i class="ti ti-eye"></i> 預覽</button>
+        <button class="small-btn" onclick="saveEstimateDraft()"><i class="ti ti-device-floppy"></i> 存草稿</button>
       </div>
-
-      <!-- 估價單號 + 日期 -->
-      <div class="est-meta-row">
-        <div class="est-meta-box">
-          <div class="est-meta-label">單號</div>
-          <div class="est-meta-val" id="est-no">—</div>
+      <div class="form-card">
+        <!-- 單號與日期 -->
+        <div class="form-meta-row">
+          <span class="form-no" id="est-no">Q----</span>
+          <span class="form-date" id="est-date"></span>
         </div>
-        <div class="est-meta-box">
-          <div class="est-meta-label">日期</div>
-          <div class="est-meta-val" id="est-date">—</div>
-        </div>
-        <div class="est-meta-box">
-          <div class="est-meta-label">有效期限</div>
-          <input class="est-meta-input" type="date" id="est-expire" />
-        </div>
-      </div>
-
-      <!-- 客戶選擇 -->
-      <div class="supplier-section" style="margin-bottom:10px;">
-        <div class="supplier-label"><i class="ti ti-user"></i> 客戶</div>
-        <div class="supplier-selected" id="est-customer-display" onclick="openCustomerPicker()">
-          <span id="est-customer-name">請選擇或新增客戶 ▾</span>
-        </div>
-        <div class="supplier-info" id="est-customer-info" style="display:none;">
-          <div id="est-customer-detail"></div>
-        </div>
-      </div>
-
-      <!-- 客戶 Modal -->
-      <div class="modal-overlay" id="customerModal" style="display:none;" onclick="closeCustomerModal(event)">
-        <div class="supplier-modal">
-          <div class="supplier-modal-title"><i class="ti ti-users"></i> 選擇客戶</div>
-          <div class="supplier-search-row">
-            <i class="ti ti-search"></i>
-            <input type="search" id="customerSearch" placeholder="搜尋客戶..." oninput="filterCustomerList(this.value)" />
-          </div>
-          <button class="nk-add-item" style="margin-bottom:8px;border-radius:8px;padding:10px;" onclick="openNewCustomerForm()">
-            <i class="ti ti-plus"></i> 新增客戶
-          </button>
-          <div class="supplier-list" id="customerPickList"></div>
-        </div>
-      </div>
-
-      <!-- 新增客戶 Modal 已移至全域 -->
-
-      <!-- 加入品項 -->
-      <div class="supplier-section" style="margin-bottom:10px;">
-        <div class="supplier-label"><i class="ti ti-package"></i> 加入品項</div>
-        <div class="search-bar" style="margin-bottom:6px;">
+        <!-- 客戶選擇 -->
+        <div class="form-section-title">客戶</div>
+        <button class="customer-select-btn" id="est-customer-btn" onclick="openCustomerPicker('estimate')">
+          <i class="ti ti-user"></i>
+          <span id="est-customer-name">選擇客戶</span>
+          <i class="ti ti-chevron-right" style="margin-left:auto;"></i>
+        </button>
+        <div id="est-customer-info" class="customer-info-box" style="display:none;"></div>
+        <!-- 品項 -->
+        <div class="form-section-title" style="margin-top:14px;">品項</div>
+        <div class="search-bar">
           <i class="ti ti-search"></i>
-          <input type="search" id="est-item-search" placeholder="搜尋商品名稱或編號..." oninput="estSearchItems(this.value)" />
+          <input type="search" id="est-item-search"
+            placeholder="搜尋商品加入..."
+            oninput="searchItemsFor('estimate', this.value)" />
         </div>
-        <div id="est-search-result" style="display:none;max-height:180px;overflow-y:auto;"></div>
+        <div id="est-item-search-result" style="display:none;"></div>
+        <div class="order-list-header">
+          <span class="order-list-title">已加入品項</span>
+          <span class="order-count" id="est-item-count">0 項</span>
+        </div>
+        <div class="order-list" id="est-item-list">
+          <div class="order-empty">尚未加入品項</div>
+        </div>
+        <!-- 金額 -->
+        <div class="form-section-title" style="margin-top:14px;">金額</div>
+        <div class="amount-section">
+          <div class="amount-row"><span>小計</span><span id="est-subtotal">$0</span></div>
+          <div class="amount-row discount-row">
+            <span>整單折扣</span>
+            <div class="discount-ctrl">
+              <select id="est-discount-type" onchange="calcEstTotal()">
+                <option value="none">無折扣</option>
+                <option value="percent">百分比 %</option>
+                <option value="amount">折扣金額 $</option>
+              </select>
+              <input type="number" id="est-discount-value" value="0" min="0"
+                style="width:70px;" onchange="calcEstTotal()" />
+            </div>
+          </div>
+          <div class="amount-row grand"><span>報價總金額</span><strong id="est-total">$0</strong></div>
+        </div>
+        <!-- 送貨方式 -->
+        <div class="form-section-title" style="margin-top:14px;">送貨方式</div>
+        <div class="delivery-btns">
+          <button class="delivery-btn active" id="dm-pickup"   onclick="selectDelivery('pickup','est')">
+            <i class="ti ti-walk"></i> 自取
+          </button>
+          <button class="delivery-btn" id="dm-delivery" onclick="selectDelivery('delivery','est')">
+            <i class="ti ti-truck"></i> 宅配
+          </button>
+          <button class="delivery-btn" id="dm-personal" onclick="selectDelivery('personal','est')">
+            <i class="ti ti-user-check"></i> 親送
+          </button>
+        </div>
+        <!-- 有效期限與備註 -->
+        <div class="cust-field" style="margin-top:12px;">
+          <label>有效期限</label>
+          <input type="date" id="est-valid-until" />
+        </div>
+        <div class="cust-field">
+          <label>備註</label>
+          <textarea id="est-remark" rows="2" placeholder="備註或特殊說明..."></textarea>
+        </div>
       </div>
+      <!-- 操作按鈕 -->
+      <button class="confirm-btn" style="background:#6B4FBB;margin-top:4px;"
+        onclick="confirmEstimate()">
+        <i class="ti ti-send"></i> 送出估價單（待客戶確認）
+      </button>
+    </div>
 
-      <!-- 品項清單 -->
+    <!-- ══════════ 正式訂單（列表）══════════ -->
+    <div class="page" id="page-orders">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-receipt-2" style="color:#6B4FBB;"></i> 正式訂單</div>
+        <button class="small-btn green-btn" onclick="newOrder()"><i class="ti ti-plus"></i> 新增</button>
+      </div>
+      <div class="filter-tabs">
+        <button class="ftab active" onclick="renderOrderList('all')">全部</button>
+        <button class="ftab" onclick="renderOrderList('pending')">待處理</button>
+        <button class="ftab" onclick="renderOrderList('producing')">生產中</button>
+        <button class="ftab" onclick="renderOrderList('ready')">待出貨</button>
+        <button class="ftab" onclick="renderOrderList('shipped')">已出貨</button>
+        <button class="ftab" onclick="renderOrderList('archived')">已結案</button>
+      </div>
+      <div id="order-list"></div>
+    </div>
+
+    <!-- ══════════ 生產管理（列表）══════════ -->
+    <div class="page" id="page-production">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('factory-menu')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-player-play" style="color:#1D9E75;"></i> 生產管理</div>
+        <button class="small-btn green-btn" onclick="newProductionOrder()"><i class="ti ti-plus"></i> 新增</button>
+      </div>
+      <div class="filter-tabs">
+        <button class="ftab active" onclick="renderProductionList('all')">全部</button>
+        <button class="ftab" onclick="renderProductionList('prepare')">備料中</button>
+        <button class="ftab" onclick="renderProductionList('producing')">生產中</button>
+        <button class="ftab" onclick="renderProductionList('done')">已完成</button>
+        <button class="ftab" onclick="renderProductionList('shipped')">已出貨</button>
+      </div>
+      <div id="production-list"></div>
+    </div>
+
+    <!-- ══════════ 進貨單 ══════════ -->
+    <div class="page" id="page-purchase">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('factory-menu')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-truck-loading" style="color:#1D9E75;"></i> 進貨單</div>
+      </div>
+      <div id="purchase-content">
+        <!-- 由 purchase.js 渲染 -->
+      </div>
+    </div>
+
+    <!-- ══════════ 調貨單 ══════════ -->
+    <div class="page" id="page-transfer">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('factory-menu')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-arrows-right-left" style="color:#1D9E75;"></i> 調貨單</div>
+        <button class="small-btn green-btn" onclick="newTransfer()"><i class="ti ti-plus"></i> 新增</button>
+      </div>
+      <div id="transfer-list"></div>
+    </div>
+
+    <!-- ══════════ A 門市 POS ══════════ -->
+    <div class="page" id="page-pos-a">
+      <div class="op-header">
+        <button class="back-btn" onclick="posBack()"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title" id="pos-title">
+          <i class="ti ti-cash-register" style="color:#BA7517;"></i> A 門市 POS
+        </div>
+        <button class="small-btn" onclick="clearPOS()"><i class="ti ti-trash"></i></button>
+      </div>
+      <!-- 外展 banner（外展模式時顯示）-->
+      <div id="event-pos-banner" style="display:none;"></div>
+      <!-- 商品搜尋 -->
+      <div class="search-bar">
+        <i class="ti ti-search"></i>
+        <input type="search" id="pos-search"
+          placeholder="搜尋商品或輸入編號..."
+          oninput="searchItemsFor('pos', this.value)" />
+      </div>
+      <div id="pos-search-result" style="display:none;"></div>
+      <!-- 購物車 -->
       <div class="order-list-header">
-        <span class="order-list-title"><i class="ti ti-list"></i> 報價品項</span>
-        <span class="order-count" id="est-item-count">0 項</span>
+        <span class="order-list-title">購物車</span>
+        <span class="order-count" id="pos-count">0 項</span>
       </div>
-      <div class="order-list" id="est-item-list">
-        <div class="order-empty">尚未加入品項</div>
+      <div class="order-list" id="pos-cart">
+        <div class="order-empty">請搜尋或掃碼加入商品</div>
       </div>
-
-      <!-- 送貨方式 -->
-      <div class="supplier-section" style="margin-bottom:10px;">
-        <div class="supplier-label"><i class="ti ti-truck-delivery"></i> 送貨方式</div>
-        <div class="delivery-method-row">
-          <button class="delivery-btn active" id="dm-pickup"   onclick="selectDelivery('pickup')">
-            <i class="ti ti-walk"></i><span>自取</span>
-          </button>
-          <button class="delivery-btn" id="dm-delivery" onclick="selectDelivery('delivery')">
-            <i class="ti ti-truck"></i><span>宅配</span>
-          </button>
-          <button class="delivery-btn" id="dm-personal" onclick="selectDelivery('personal')">
-            <i class="ti ti-user-check"></i><span>親送</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 備註 -->
-      <div class="cust-field" style="margin-top:10px;">
-        <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:6px;"><i class="ti ti-notes"></i> 備註</label>
-        <textarea id="est-remark" rows="2" placeholder="備註或特殊說明..." style="width:100%;padding:10px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);resize:none;font-family:var(--font);"></textarea>
-      </div>
-
-      <!-- 金額小計 -->
-      <div class="pos-total-section" style="margin-top:10px;">
-        <div class="pos-total-row"><span>小計</span><span id="est-subtotal">$0</span></div>
-        <div class="pos-total-row discount-row">
+      <!-- 金額 -->
+      <div class="amount-section">
+        <div class="amount-row"><span>小計</span><span id="pos-subtotal">$0</span></div>
+        <div class="amount-row discount-row">
           <span>折扣</span>
           <div class="discount-ctrl">
-            <button onclick="estChangeDiscount(-5)">−5%</button>
-            <span id="est-discount-label">0%</span>
-            <button onclick="estChangeDiscount(5)">+5%</button>
+            <select id="pos-discount-type" onchange="calcPOSTotal()">
+              <option value="none">無折扣</option>
+              <option value="percent">%</option>
+              <option value="amount">$</option>
+            </select>
+            <input type="number" id="pos-discount-value" value="0" min="0"
+              style="width:70px;" onchange="calcPOSTotal()" />
           </div>
         </div>
-        <div class="pos-total-row pos-grand"><span>報價總金額</span><span id="est-total" class="pos-total-num">$0</span></div>
-        <div class="pos-total-row" style="padding-top:10px;border-top:1px solid var(--border);">
-          <span style="font-weight:500;">付款狀態</span>
-          <div class="pay-status-row">
-            <button class="pay-status-btn active" id="ps-unpaid"    onclick="selectPayStatus('unpaid')">未收款</button>
-            <button class="pay-status-btn"         id="ps-partial"  onclick="selectPayStatus('partial')">部分收款</button>
-            <button class="pay-status-btn"         id="ps-paid"     onclick="selectPayStatus('paid')">已收款</button>
-          </div>
-        </div>
-        <div id="partial-amount-row" style="display:none;" class="pos-total-row">
-          <span style="font-size:13px;color:var(--text2);">已收金額</span>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="color:var(--text3);">$</span>
-            <input type="number" id="est-paid-amount" min="0" placeholder="0"
-              style="width:100px;padding:6px 8px;font-size:16px;font-weight:600;border:1px solid var(--border);border-radius:6px;text-align:right;background:var(--surface);color:var(--text);" />
-          </div>
-        </div>
+        <div class="amount-row grand"><span>應付</span><strong id="pos-total">$0</strong></div>
       </div>
-
-      <!-- 操作按鈕 -->
-      <button class="confirm-btn" style="background:#185FA5;margin-bottom:8px;" onclick="confirmAndCreateProcess()">
-        <i class="ti ti-player-play"></i> 確認並建立生產訂單
-      </button>
-      <div class="est-action-row" style="margin-bottom:4px;">
-        <button class="est-act-btn preview" onclick="previewEstimate()"><i class="ti ti-eye"></i> 預覽估價單</button>
-        <button class="est-act-btn" style="background:var(--bg);color:var(--text2);border:1px solid var(--border);" onclick="saveEstimateDraft()"><i class="ti ti-device-floppy"></i> 存草稿</button>
-      </div>
-    </div>
-
-    <!-- ========== PAGE: 估價單預覽/PDF ========== -->
-    <div class="page" id="page-estimate-preview">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('estimate-edit')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-file-invoice"></i> 估價單預覽</div>
-        <button class="small-btn green-btn" onclick="printEstimate()"><i class="ti ti-printer"></i> 列印/PDF</button>
-      </div>
-      <div class="est-preview-wrap" id="est-preview-content"></div>
-      <div class="est-confirm-actions" id="est-confirm-actions" style="display:none;">
-        <button class="redit-btn" onclick="cancelEstimate()">
-          <i class="ti ti-x"></i> 取消此估價單
+      <!-- 付款 -->
+      <div class="pay-method-btns">
+        <button class="pay-method-btn active" id="pay-cash" onclick="selectPayMethod('cash')">
+          <i class="ti ti-cash"></i> 現金
+        </button>
+        <button class="pay-method-btn" id="pay-card" onclick="selectPayMethod('card')">
+          <i class="ti ti-credit-card"></i> 刷卡
+        </button>
+        <button class="pay-method-btn" id="pay-transfer" onclick="selectPayMethod('transfer')">
+          <i class="ti ti-building-bank"></i> 轉帳
         </button>
       </div>
+      <div id="cash-change-section" style="display:none;" class="cash-section">
+        <div class="cust-field">
+          <label>收款金額</label>
+          <input type="number" id="pos-cash-received" placeholder="0"
+            oninput="calcChange()" style="font-size:24px;" />
+        </div>
+        <div class="amount-row" style="font-size:18px;">
+          <span>找零</span><strong id="pos-change">$0</strong>
+        </div>
+      </div>
+      <button class="confirm-btn" style="background:#BA7517;margin-top:8px;"
+        onclick="confirmPOS()">
+        <i class="ti ti-check"></i> 確認收款
+      </button>
     </div>
 
-    <!-- ========== PAGE: 客戶資料 ========== -->
+    <!-- ══════════ B 門市日銷售 ══════════ -->
+    <div class="page" id="page-store-b-sales">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-store" style="color:#BA7517;"></i> B 門市銷售輸入</div>
+      </div>
+      <div class="form-card">
+        <div class="cust-field">
+          <label>銷售日期</label>
+          <input type="date" id="storeB-date" />
+        </div>
+        <div class="form-section-title">今日銷售品項（只輸入有賣的）</div>
+        <div class="search-bar">
+          <i class="ti ti-search"></i>
+          <input type="search" id="storeB-search"
+            placeholder="搜尋商品加入..."
+            oninput="searchItemsFor('storeB', this.value)" />
+        </div>
+        <div id="storeB-search-result" style="display:none;"></div>
+        <div class="order-list" id="storeB-item-list">
+          <div class="order-empty">尚未加入品項</div>
+        </div>
+      </div>
+      <button class="confirm-btn" style="background:#BA7517;" onclick="submitStoreBSale()">
+        <i class="ti ti-check"></i> 確認送出
+      </button>
+    </div>
+
+    <!-- ══════════ 外展活動 ══════════ -->
+    <div class="page" id="page-events">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-map-pin" style="color:#6B4FBB;"></i> 外展活動</div>
+        <button class="small-btn green-btn" onclick="newEvent()"><i class="ti ti-plus"></i> 新增</button>
+      </div>
+      <div class="filter-tabs">
+        <button class="ftab active" onclick="filterEvents('all')">全部</button>
+        <button class="ftab" onclick="filterEvents('upcoming')">即將開始</button>
+        <button class="ftab" onclick="filterEvents('active')">進行中</button>
+        <button class="ftab" onclick="filterEvents('closed')">已結束</button>
+      </div>
+      <div id="event-list"></div>
+    </div>
+
+    <!-- ══════════ 客戶管理 ══════════ -->
     <div class="page" id="page-customers">
       <div class="op-header">
         <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-users" style="color:#185FA5;"></i> 客戶資料</div>
-        <button class="small-btn green-btn" onclick="openNewCustomerForm(true)"><i class="ti ti-plus"></i> 新增</button>
+        <div class="op-title"><i class="ti ti-users" style="color:#1D9E75;"></i> 客戶管理</div>
+        <button class="small-btn green-btn" onclick="newCustomer()"><i class="ti ti-plus"></i> 新增</button>
       </div>
-      <div class="search-bar" style="margin-bottom:10px;">
+      <div class="search-bar">
         <i class="ti ti-search"></i>
-        <input type="search" id="customer-search" placeholder="搜尋客戶姓名或電話..." oninput="renderCustomerList(this.value)" />
+        <input type="search" id="customer-search"
+          placeholder="搜尋客戶名稱..."
+          oninput="renderCustomerList(this.value)" />
       </div>
       <div id="customer-list"></div>
     </div>
 
-    <!-- ========== PAGE: 客戶詳細 ========== -->
-    <div class="page" id="page-customer-detail">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('customers')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title" id="cust-detail-name">客戶詳細</div>
-        <button class="small-btn" onclick="editCurrentCustomer()"><i class="ti ti-edit"></i> 編輯</button>
-      </div>
-      <div class="cust-detail-card" id="cust-detail-card"></div>
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-history"></i> 估價記錄</div>
-      <div id="cust-estimate-history"><div class="order-empty" style="padding:20px;text-align:center;color:var(--text3);">尚無估價記錄</div></div>
-    </div>
-
-    <!-- ========== PAGE: 銷貨明細 ========== -->
-    <div class="page" id="page-sale-report">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-chart-bar" style="color:#BA7517;"></i> 銷貨明細</div>
-        <button class="small-btn" onclick="exportReport('sale')"><i class="ti ti-download"></i> 匯出</button>
-      </div>
-      <!-- 篩選區 -->
-      <div class="report-filter-card">
-        <div class="report-filter-row">
-          <div class="report-filter-item">
-            <label>客戶</label>
-            <select id="sale-filter-customer" onchange="renderSaleReport()">
-              <option value="">全部客戶</option>
-            </select>
-          </div>
-          <div class="report-filter-item">
-            <label>品項</label>
-            <input type="search" id="sale-filter-item" placeholder="品名或編號..." oninput="renderSaleReport()" />
-          </div>
-        </div>
-        <div class="report-filter-row">
-          <div class="report-filter-item">
-            <label>開始日期</label>
-            <input type="date" id="sale-date-from" onchange="renderSaleReport()" />
-          </div>
-          <div class="report-filter-item">
-            <label>結束日期</label>
-            <input type="date" id="sale-date-to" onchange="renderSaleReport()" />
-          </div>
-        </div>
-        <button class="report-clear-btn" onclick="clearReportFilter('sale')">
-          <i class="ti ti-x"></i> 清除篩選
-        </button>
-      </div>
-      <!-- 統計列 -->
-      <div class="report-stats" id="sale-stats"></div>
-      <!-- 結果列表 -->
-      <div id="sale-report-list"></div>
-    </div>
-
-    <!-- ========== PAGE: 進貨明細 ========== -->
-    <div class="page" id="page-purchase-report">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('factory-menu')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-chart-line" style="color:#1D9E75;"></i> 進貨明細</div>
-        <button class="small-btn" onclick="exportReport('purchase')"><i class="ti ti-download"></i> 匯出</button>
-      </div>
-      <!-- 篩選區 -->
-      <div class="report-filter-card">
-        <div class="report-filter-row">
-          <div class="report-filter-item">
-            <label>廠商</label>
-            <select id="purchase-filter-supplier" onchange="renderPurchaseReport()">
-              <option value="">全部廠商</option>
-            </select>
-          </div>
-          <div class="report-filter-item">
-            <label>品項</label>
-            <input type="search" id="purchase-filter-item" placeholder="品名或編號..." oninput="renderPurchaseReport()" />
-          </div>
-        </div>
-        <div class="report-filter-row">
-          <div class="report-filter-item">
-            <label>開始日期</label>
-            <input type="date" id="purchase-date-from" onchange="renderPurchaseReport()" />
-          </div>
-          <div class="report-filter-item">
-            <label>結束日期</label>
-            <input type="date" id="purchase-date-to" onchange="renderPurchaseReport()" />
-          </div>
-        </div>
-        <button class="report-clear-btn" onclick="clearReportFilter('purchase')">
-          <i class="ti ti-x"></i> 清除篩選
-        </button>
-      </div>
-      <!-- 統計列 -->
-      <div class="report-stats" id="purchase-stats"></div>
-      <!-- 結果列表 -->
-      <div id="purchase-report-list"></div>
-    </div>
-
-    <!-- ========== PAGE: 製程進度（架構預留） ========== -->
-    <!-- ========== PAGE: 製程進度列表 ========== -->
-    <div class="page" id="page-process-track">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('factory-menu')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-list-check" style="color:#185FA5;"></i> 製程進度</div>
-        <button class="small-btn green-btn" onclick="newProductionOrder()"><i class="ti ti-plus"></i> 新增</button>
-      </div>
-      <!-- 狀態篩選 -->
-      <div class="est-filter-row">
-        <button class="ftab active" id="pf-all"      onclick="filterOrders('all')">全部</button>
-        <button class="ftab"        id="pf-prepare"  onclick="filterOrders('prepare')">備料中</button>
-        <button class="ftab"        id="pf-producing" onclick="filterOrders('producing')">生產中</button>
-        <button class="ftab"        id="pf-done"     onclick="filterOrders('done')">完成</button>
-        <button class="ftab"        id="pf-shipped"  onclick="filterOrders('shipped')">已出貨</button>
-      </div>
-      <div id="process-order-list"></div>
-    </div>
-
-    <!-- ========== PAGE: 新增/編輯生產訂單 ========== -->
-    <div class="page" id="page-process-edit">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('process-track')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title" id="proc-edit-title">新增生產訂單</div>
-        <button class="small-btn" onclick="saveProcDraft()"><i class="ti ti-device-floppy"></i> 儲存</button>
-      </div>
-      <!-- 訂單資訊 -->
-      <div class="est-meta-row">
-        <div class="est-meta-box">
-          <div class="est-meta-label">單號</div>
-          <div class="est-meta-val" id="proc-no">—</div>
-        </div>
-        <div class="est-meta-box">
-          <div class="est-meta-label">建立日期</div>
-          <div class="est-meta-val" id="proc-date">—</div>
-        </div>
-        <div class="est-meta-box">
-          <div class="est-meta-label">預計完成</div>
-          <input class="est-meta-input" type="date" id="proc-deadline" />
-        </div>
-      </div>
-      <!-- 來源 -->
-      <div class="proc-source-row">
-        <div class="proc-source-label"><i class="ti ti-link"></i> 來源單號（選填）</div>
-        <input type="text" id="proc-source-ref" placeholder="如：估價單 Q250603-001" class="proc-source-input" />
-      </div>
-      <!-- 客戶 -->
-      <div class="supplier-section" style="margin-bottom:10px;">
-        <div class="supplier-label"><i class="ti ti-user"></i> 客戶（選填）</div>
-        <div class="supplier-selected" id="proc-customer-display" onclick="openProcCustomerPicker()">
-          <span id="proc-customer-name">選擇客戶 ▾</span>
-        </div>
-      </div>
-      <!-- 加入品項 -->
-      <div class="supplier-section" style="margin-bottom:10px;">
-        <div class="supplier-label"><i class="ti ti-package"></i> 加入成品</div>
-        <div class="search-bar" style="margin-bottom:6px;">
-          <i class="ti ti-search"></i>
-          <input type="search" id="proc-item-search" placeholder="搜尋成品名稱..." oninput="procSearchItems(this.value)" />
-        </div>
-        <div id="proc-search-result" style="display:none;max-height:180px;overflow-y:auto;"></div>
-      </div>
-      <!-- 品項清單 -->
-      <div class="order-list-header">
-        <span class="order-list-title"><i class="ti ti-list"></i> 生產品項</span>
-        <span class="order-count" id="proc-item-count">0 項</span>
-      </div>
-      <div class="order-list" id="proc-item-list"><div class="order-empty">尚未加入品項</div></div>
-      <!-- 備註 -->
-      <div class="cust-field" style="margin-top:10px;">
-        <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:6px;"><i class="ti ti-notes"></i> 備註</label>
-        <textarea id="proc-remark" rows="2" placeholder="備註或特殊說明..."
-          style="width:100%;padding:10px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);resize:none;font-family:var(--font);"></textarea>
-      </div>
-      <button class="confirm-btn" style="margin-top:10px;background:#185FA5;" onclick="confirmProcOrder()">
-        <i class="ti ti-check"></i> 建立生產訂單
-      </button>
-    </div>
-
-    <!-- ========== PAGE: 製程進度詳細 ========== -->
-    <div class="page" id="page-process-detail">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('process-track')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title" id="proc-detail-no">生產訂單</div>
-        <button class="small-btn" onclick="editProcOrder()"><i class="ti ti-edit"></i> 編輯</button>
-      </div>
-      <!-- 狀態進度條 -->
-      <div class="proc-progress-card" id="proc-progress-card"></div>
-      <!-- 品項列表 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-package"></i> 生產品項</div>
-      <div id="proc-detail-items"></div>
-      <!-- 客戶與備註 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-info-circle"></i> 訂單資訊</div>
-      <div class="cust-detail-card" id="proc-detail-info"></div>
-      <!-- 狀態更新按鈕 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-arrow-right"></i> 更新狀態</div>
-      <div id="proc-status-actions"></div>
-      <!-- 操作記錄 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-history"></i> 狀態紀錄</div>
-      <div class="order-list" id="proc-status-log"></div>
-    </div>
-
-    <!-- ========== PAGE: 後台管理 ========== -->
+    <!-- ══════════ 後台管理 ══════════ -->
     <div class="page" id="page-admin">
       <div class="op-header">
         <button class="back-btn" onclick="showPage('home')"><i class="ti ti-arrow-left"></i></button>
         <div class="op-title"><i class="ti ti-tool" style="color:#6B4FBB;"></i> 後台管理</div>
       </div>
       <div class="admin-menu">
-
         <div class="admin-group-title">商品管理</div>
         <button class="admin-item" onclick="showPage('admin-products')">
           <i class="ti ti-package-import"></i>
-          <div><div class="admin-item-name">新增 / 編輯商品</div><div class="admin-item-sub">成品、半成品、包材</div></div>
+          <div><div class="admin-item-name">商品管理</div><div class="admin-item-sub">新增、編輯、停用</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
         <button class="admin-item" onclick="showPage('admin-bom')">
           <i class="ti ti-git-merge"></i>
-          <div><div class="admin-item-name">加工組合（BOM）</div><div class="admin-item-sub">設定成品需要哪些材料</div></div>
+          <div><div class="admin-item-name">BOM 加工組合</div><div class="admin-item-sub">成品材料設定</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
-
         <div class="admin-group-title" style="margin-top:14px;">廠商 / 客戶</div>
         <button class="admin-item" onclick="showPage('admin-suppliers')">
           <i class="ti ti-building-store"></i>
-          <div><div class="admin-item-name">新增 / 編輯廠商</div><div class="admin-item-sub">供應商聯絡與帳戶資料</div></div>
+          <div><div class="admin-item-name">廠商管理</div><div class="admin-item-sub">聯絡資料、帳號</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
         <button class="admin-item" onclick="showPage('customers')">
           <i class="ti ti-users"></i>
-          <div><div class="admin-item-name">新增 / 編輯客戶</div><div class="admin-item-sub">客戶聯絡資料</div></div>
+          <div><div class="admin-item-name">客戶管理</div><div class="admin-item-sub">聯絡、發票、收件</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
-
+        <div class="admin-group-title" style="margin-top:14px;">地點管理</div>
+        <button class="admin-item" onclick="showPage('admin-locations')">
+          <i class="ti ti-map-2"></i>
+          <div><div class="admin-item-name">門市 / 地點設定</div><div class="admin-item-sub">新增、編輯地點</div></div>
+          <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
+        </button>
         <div class="admin-group-title" style="margin-top:14px;">財務</div>
         <button class="admin-item" onclick="showPage('finance')">
           <i class="ti ti-chart-pie"></i>
-          <div><div class="admin-item-name">財務總覽</div><div class="admin-item-sub">月報表、銷售趨勢、未收款</div></div>
+          <div><div class="admin-item-name">財務總覽</div><div class="admin-item-sub">月報、週報、趨勢</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
         <button class="admin-item" onclick="showPage('unpaid')">
           <i class="ti ti-receipt-off"></i>
-          <div><div class="admin-item-name">未收款訂單</div><div class="admin-item-sub">追蹤應收帳款</div></div>
+          <div><div class="admin-item-name">未收款訂單</div><div class="admin-item-sub">應收帳款追蹤</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
-
+        <div class="admin-group-title" style="margin-top:14px;">資料</div>
+        <button class="admin-item" onclick="showPage('admin-import')">
+          <i class="ti ti-table-import"></i>
+          <div><div class="admin-item-name">Excel 匯入</div><div class="admin-item-sub">商品、廠商、客戶</div></div>
+          <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
+        </button>
         <div class="admin-group-title" style="margin-top:14px;">系統</div>
-        <button class="admin-item" onclick="requestAdmin(()=>showPage('admin-system'),'進入系統設定')">
+        <button class="admin-item" onclick="requireAdmin(()=>showPage('admin-system'))">
           <i class="ti ti-settings"></i>
           <div><div class="admin-item-name">系統設定</div><div class="admin-item-sub">密碼、重設、備份</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
@@ -1194,73 +542,7 @@
       </div>
     </div>
 
-    <!-- ========== PAGE: 商品管理 ========== -->
-    <div class="page" id="page-admin-products">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-package-import" style="color:#6B4FBB;"></i> 商品管理</div>
-        <button class="small-btn green-btn" onclick="openNewProductForm()"><i class="ti ti-plus"></i> 新增</button>
-      </div>
-      <div class="filter-tabs">
-        <button class="ftab active" id="pf-finished" onclick="filterAdminProducts('finished')">成品</button>
-        <button class="ftab" id="pf-semi"     onclick="filterAdminProducts('semi')">半成品</button>
-        <button class="ftab" id="pf-pack"     onclick="filterAdminProducts('pack')">包材</button>
-      </div>
-      <div class="search-bar" style="margin-bottom:10px;">
-        <i class="ti ti-search"></i>
-        <input type="search" id="admin-product-search" placeholder="搜尋商品..." oninput="renderAdminProducts()" />
-      </div>
-      <div id="admin-product-list"></div>
-    </div>
-
-    <!-- ========== PAGE: BOM 加工組合 ========== -->
-    <div class="page" id="page-admin-bom">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-git-merge" style="color:#6B4FBB;"></i> 加工組合（BOM）</div>
-      </div>
-      <div class="search-bar" style="margin-bottom:10px;">
-        <i class="ti ti-search"></i>
-        <input type="search" id="bom-search" placeholder="搜尋成品..." oninput="renderBomList(this.value)" />
-      </div>
-      <div id="bom-list"></div>
-    </div>
-
-    <!-- ========== PAGE: BOM 編輯 ========== -->
-    <div class="page" id="page-admin-bom-edit">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('admin-bom')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title" id="bom-edit-title">編輯 BOM</div>
-        <button class="small-btn green-btn" onclick="saveBomEdit()"><i class="ti ti-check"></i> 儲存</button>
-      </div>
-      <div class="panel-hint" id="bom-edit-hint">設定這個成品需要哪些半成品和包材</div>
-      <div class="search-bar" style="margin-bottom:8px;">
-        <i class="ti ti-search"></i>
-        <input type="search" id="bom-mat-search" placeholder="搜尋材料加入..." oninput="bomSearchMat(this.value)" />
-      </div>
-      <div id="bom-mat-result" style="display:none;max-height:180px;overflow-y:auto;margin-bottom:8px;"></div>
-      <div class="order-list-header">
-        <span class="order-list-title"><i class="ti ti-list"></i> 目前組合材料</span>
-        <span class="order-count" id="bom-mat-count">0 項</span>
-      </div>
-      <div class="order-list" id="bom-mat-list"><div class="order-empty">尚未設定材料</div></div>
-    </div>
-
-    <!-- ========== PAGE: 廠商管理 ========== -->
-    <div class="page" id="page-admin-suppliers">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-building-store" style="color:#6B4FBB;"></i> 廠商管理</div>
-        <button class="small-btn green-btn" onclick="openNewSupplierForm()"><i class="ti ti-plus"></i> 新增</button>
-      </div>
-      <div class="search-bar" style="margin-bottom:10px;">
-        <i class="ti ti-search"></i>
-        <input type="search" id="admin-sup-search" placeholder="搜尋廠商..." oninput="renderAdminSuppliers(this.value)" />
-      </div>
-      <div id="admin-supplier-list"></div>
-    </div>
-
-    <!-- ========== PAGE: 系統設定 ========== -->
+    <!-- ══════════ 系統設定（管理員）══════════ -->
     <div class="page" id="page-admin-system">
       <div class="op-header">
         <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
@@ -1269,577 +551,177 @@
       <div class="admin-menu">
         <button class="admin-item" onclick="openChangePinModal()">
           <i class="ti ti-key"></i>
-          <div><div class="admin-item-name">修改主管密碼</div><div class="admin-item-sub">預設：1234</div></div>
+          <div><div class="admin-item-name">修改 PIN 碼</div><div class="admin-item-sub">主管 / 管理員密碼</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
-        <button class="admin-item" onclick="exportCSV()">
+        <button class="admin-item" onclick="exportAllData()">
           <i class="ti ti-download"></i>
-          <div><div class="admin-item-name">匯出所有記錄</div><div class="admin-item-sub">下載 CSV 檔案</div></div>
+          <div><div class="admin-item-name">匯出所有記錄</div><div class="admin-item-sub">下載 CSV 備份</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
-        <button class="admin-item danger" onclick="confirmResetInventory()">
+        <button class="admin-item danger" onclick="requireAdmin(confirmResetInventory)">
           <i class="ti ti-refresh"></i>
-          <div><div class="admin-item-name">重設庫存</div><div class="admin-item-sub">清除所有庫存數量重新開始</div></div>
+          <div><div class="admin-item-name">重設庫存</div><div class="admin-item-sub">清除並重新設定</div></div>
+          <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
+        </button>
+        <button class="admin-item danger" onclick="requireAdmin(confirmClearAllData)">
+          <i class="ti ti-trash"></i>
+          <div><div class="admin-item-name">清除所有資料</div><div class="admin-item-sub">正式上線前清除測試資料</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
       </div>
     </div>
 
-    <!-- ========== PAGE: 財務總覽 ========== -->
-    <div class="page" id="page-finance">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-chart-pie" style="color:#6B4FBB;"></i> 財務總覽</div>
-      </div>
-      <!-- 月份選擇 -->
-      <div class="finance-month-row">
-        <button class="finance-month-btn" onclick="changeMonth(-1)"><i class="ti ti-chevron-left"></i></button>
-        <div class="finance-month-label" id="finance-month-label">—</div>
-        <button class="finance-month-btn" onclick="changeMonth(1)"><i class="ti ti-chevron-right"></i></button>
-      </div>
-      <!-- 本月統計 -->
-      <div class="finance-stats-grid" id="finance-stats"></div>
-      <!-- 付款方式圓餅 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-chart-pie"></i> 付款方式</div>
-      <div id="finance-pay-chart"></div>
-      <!-- 每日銷售趨勢 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-trending-up"></i> 每日銷售趨勢</div>
-      <div class="finance-chart-wrap" id="finance-daily-chart"></div>
-      <!-- 品項排行 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-trophy"></i> 本月暢銷品項 TOP 10</div>
-      <div id="finance-ranking"></div>
-    </div>
-
-    <!-- ========== PAGE: 未收款訂單 ========== -->
-    <div class="page" id="page-unpaid">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-receipt-off" style="color:#E24B4A;"></i> 未收款訂單</div>
-      </div>
-      <div class="finance-stats-grid" id="unpaid-stats" style="margin-bottom:12px;"></div>
-      <div id="unpaid-list"></div>
-    </div>
-
-
-    <!-- ========== PAGE: 工廠選單 ========== -->
-    <div class="page" id="page-factory-menu">
-      <div class="page-header">
-        <div class="page-title"><i class="ti ti-building-factory-2"></i> 工廠作業</div>
-      </div>
-      <div class="submenu-grid">
-        <button class="submenu-btn factory-color" onclick="showPage('purchase')">
-          <i class="ti ti-truck-loading"></i>
-          <span class="sb-name">進貨單</span>
-          <span class="sb-sub">多品項進貨</span>
-        </button>
-        <button class="submenu-btn factory-color" onclick="showPage('prod')">
-          <i class="ti ti-player-play"></i>
-          <span class="sb-name">加工生產</span>
-          <span class="sb-sub">掃碼自動扣料</span>
-        </button>
-        <button class="submenu-btn factory-color" onclick="showPage('shipment')">
-          <i class="ti ti-truck"></i>
-          <span class="sb-name">出貨單</span>
-          <span class="sb-sub">多品項出貨</span>
-        </button>
-        <button class="submenu-btn factory-color" onclick="showPage('process-track')">
-          <i class="ti ti-list-check"></i>
-          <span class="sb-name">製程進度</span>
-          <span class="sb-sub">追蹤生產狀態</span>
-        </button>
-        <button class="submenu-btn factory-color" onclick="showPage('purchase-report')">
-          <i class="ti ti-chart-line"></i>
-          <span class="sb-name">進貨明細</span>
-          <span class="sb-sub">查詢進貨記錄</span>
-        </button>
-        <button class="submenu-btn factory-color" onclick="showPage('history')">
-          <i class="ti ti-history"></i>
-          <span class="sb-name">作業記錄</span>
-          <span class="sb-sub">所有操作歷史</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- ========== PAGE: 銷售選單 ========== -->
-    <div class="page" id="page-sales-menu">
-      <div class="page-header">
-        <div class="page-title"><i class="ti ti-shopping-cart"></i> 銷售作業</div>
-      </div>
-      <div class="submenu-grid">
-        <button class="submenu-btn sales-color" onclick="showPage('pos')">
-          <i class="ti ti-cash-register"></i>
-          <span class="sb-name">POS 收款</span>
-          <span class="sb-sub">現場銷售收款</span>
-        </button>
-        <button class="submenu-btn sales-color" onclick="showPage('estimate')">
-          <i class="ti ti-file-invoice"></i>
-          <span class="sb-name">估價單</span>
-          <span class="sb-sub">報價給客戶</span>
-        </button>
-        <button class="submenu-btn sales-color" onclick="showPage('customers')">
-          <i class="ti ti-users"></i>
-          <span class="sb-name">客戶資料</span>
-          <span class="sb-sub">管理客戶聯絡</span>
-        </button>
-        <button class="submenu-btn sales-color" onclick="showPage('sale-report')">
-          <i class="ti ti-chart-bar"></i>
-          <span class="sb-name">銷貨明細</span>
-          <span class="sb-sub">查詢銷售記錄</span>
-        </button>
-        <button class="submenu-btn" style="background:#EDE9F8;color:#3D2780;border-color:#C4B5F4;" onclick="showPage('events')">
-          <i class="ti ti-map-pin"></i>
-          <span class="sb-name">外展活動</span>
-          <span class="sb-sub">展覽管理與POS</span>
-        </button>
-      </div>
-    </div>
-
-
-    <!-- ========== PAGE: 外展活動列表 ========== -->
-    <div class="page" id="page-events">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-map-pin" style="color:#6B4FBB;"></i> 外展活動</div>
-        <button class="small-btn green-btn" onclick="newEvent()"><i class="ti ti-plus"></i> 新增</button>
-      </div>
-      <div class="est-filter-row">
-        <button class="ftab active" id="evf-all"     onclick="filterEvents('all')">全部</button>
-        <button class="ftab"        id="evf-active"  onclick="filterEvents('active')">進行中</button>
-        <button class="ftab"        id="evf-upcoming"onclick="filterEvents('upcoming')">即將開始</button>
-        <button class="ftab"        id="evf-ended"   onclick="filterEvents('ended')">已結束</button>
-      </div>
-      <div id="event-list"></div>
-    </div>
-
-    <!-- ========== PAGE: 新增/編輯外展 ========== -->
-    <div class="page" id="page-event-edit">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('events')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title" id="event-edit-title">新增外展活動</div>
-        <button class="small-btn green-btn" onclick="saveEvent()"><i class="ti ti-check"></i> 儲存</button>
-      </div>
-
-      <!-- 基本資訊 -->
-      <div class="event-form-card">
-        <div class="cust-form-section" style="border-top:none;padding-top:0;margin-top:0;">活動資訊</div>
-        <div class="cust-field">
-          <label>活動名稱 *</label>
-          <input type="text" id="ev-name" placeholder="例：2025 台灣美食博覽會" />
-        </div>
-        <div class="cust-field">
-          <label>地點 *</label>
-          <input type="text" id="ev-location" placeholder="例：台北世貿一館 B區 123攤" />
-        </div>
-        <div class="event-date-row">
-          <div class="cust-field" style="flex:1;">
-            <label>開始日期 *</label>
-            <input type="date" id="ev-start" />
-          </div>
-          <div class="event-date-sep">〜</div>
-          <div class="cust-field" style="flex:1;">
-            <label>結束日期 *</label>
-            <input type="date" id="ev-end" />
-          </div>
-        </div>
-        <div class="cust-field">
-          <label>參展人員</label>
-          <input type="text" id="ev-staff" placeholder="例：王小明、陳小華" />
-        </div>
-        <div class="cust-field">
-          <label>備註</label>
-          <textarea id="ev-note" rows="2" placeholder="天氣、人流、注意事項..."
-            style="width:100%;padding:10px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);resize:none;font-family:var(--font);outline:none;"></textarea>
-        </div>
-      </div>
-
-      <!-- 外展商品選擇 -->
-      <div class="event-form-card">
-        <div class="cust-form-section" style="border-top:none;padding-top:0;margin-top:0;">帶去的商品</div>
-        <div class="supplier-label" style="margin-bottom:8px;font-size:12px;color:var(--text2);">選好商品後，外展 POS 只會顯示這些品項</div>
-        <div class="search-bar" style="margin-bottom:8px;">
-          <i class="ti ti-search"></i>
-          <input type="search" id="ev-item-search" placeholder="搜尋商品加入外展清單..." oninput="evSearchItems(this.value)" />
-        </div>
-        <div id="ev-search-result" style="display:none;max-height:200px;overflow-y:auto;margin-bottom:8px;"></div>
-        <div class="order-list-header">
-          <span class="order-list-title"><i class="ti ti-package"></i> 外展商品清單</span>
-          <span class="order-count" id="ev-item-count">0 項</span>
-        </div>
-        <div class="order-list" id="ev-item-list">
-          <div class="order-empty">尚未選擇商品</div>
-        </div>
-      </div>
-
-      <button class="confirm-btn" style="background:#6B4FBB;margin-top:4px;" onclick="saveEvent()">
-        <i class="ti ti-check"></i> 儲存外展活動
-      </button>
-    </div>
-
-    <!-- ========== PAGE: 外展詳細 / 報告 ========== -->
-    <div class="page" id="page-event-detail">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('events')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title" id="event-detail-title">外展活動</div>
-        <div style="display:flex;gap:6px;">
-          <button class="small-btn" onclick="editCurrentEvent()"><i class="ti ti-edit"></i> 編輯</button>
-          <button class="small-btn" style="background:#FCEBEB;color:#791F1F;border-color:#F09595;" onclick="confirmDeleteEvent()"><i class="ti ti-trash"></i></button>
-        </div>
-      </div>
-
-      <!-- 活動資訊 -->
-      <div class="event-info-card" id="event-info-card"></div>
-
-      <!-- 離線外展模式切換 -->
-      <div id="event-offline-section"></div>
-
-      <!-- 開始外展 POS 按鈕 -->
-      <div id="event-start-section"></div>
-
-      <!-- 每日銷售 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-chart-bar"></i> 銷售報告</div>
-      <div id="event-report-section"></div>
-
-      <!-- 商品銷售排行 -->
-      <div class="section-title" style="margin-top:14px;"><i class="ti ti-trophy"></i> 商品銷售排行</div>
-      <div id="event-ranking-section"></div>
-    </div>
-
-
-
-    <!-- ========== PAGE: 外展審核上傳 ========== -->
-    <div class="page" id="page-event-review">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('event-detail')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-clipboard-check" style="color:#6B4FBB;"></i> 外展審核上傳</div>
-      </div>
-
-      <!-- 活動資訊 -->
-      <div class="review-meta" id="review-meta"></div>
-
-      <!-- 離線模式標示 -->
-      <div class="offline-badge" id="offline-badge" style="display:none;">
-        <i class="ti ti-wifi-off"></i> 外展離線模式中
-        <span id="offline-record-count"></span>
-      </div>
-
-      <!-- 銷售明細（每個商品）-->
-      <div class="section-title" style="margin-top:12px;">
-        <i class="ti ti-package"></i> 商品銷售明細
-      </div>
-      <div id="review-items-list"></div>
-
-      <!-- 總計 -->
-      <div class="review-total-card" id="review-total-card"></div>
-
-      <!-- 實際清點警告 -->
-      <div id="review-diff-warning" style="display:none;"></div>
-
-      <!-- 主管審核確認 -->
-      <div class="review-confirm-section" id="review-confirm-section">
-        <div class="section-title"><i class="ti ti-lock"></i> 主管審核確認</div>
-        <div class="cust-field">
-          <label>上傳備註（選填）</label>
-          <input type="text" id="review-note" placeholder="例：攤位A，結算無誤" />
-        </div>
-        <button class="confirm-btn" style="background:#6B4FBB;margin-top:8px;"
-          onclick="requestAdmin(()=>submitEventUpload(),'審核外展銷售並上傳')">
-          <i class="ti ti-cloud-upload"></i> 主管確認並上傳
-        </button>
-        <button class="redit-btn" style="margin-top:8px;" onclick="showPage('event-detail')">
-          <i class="ti ti-arrow-left"></i> 返回繼續銷售
-        </button>
-      </div>
-
-      <!-- 已上傳狀態 -->
-      <div id="review-uploaded-section" style="display:none;">
-        <div class="review-uploaded-banner">
-          <i class="ti ti-circle-check" style="font-size:32px;color:#1D9E75;"></i>
-          <div>
-            <div style="font-size:16px;font-weight:700;color:#1D9E75;">已上傳至雲端</div>
-            <div id="review-uploaded-time" style="font-size:12px;color:var(--text2);"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ========== PAGE: 出貨單（列印） ========== -->
-    <div class="page" id="page-shipping-note">
-      <div class="op-header">
-        <button class="back-btn" onclick="showPage('process-detail')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-file-text" style="color:#6B4FBB;"></i> 出貨單</div>
-        <button class="small-btn green-btn" onclick="printShippingNote()"><i class="ti ti-printer"></i> 列印</button>
-      </div>
-
-      <!-- 物流資訊填寫（列印前填） -->
-      <div class="shipping-form-card">
-        <div class="cust-form-section" style="border-top:none;padding-top:0;margin-top:0;">物流資訊</div>
-        <div class="shipping-method-row">
-          <button class="delivery-btn active" id="sn-pickup"   onclick="selectShipping('pickup')">
-            <i class="ti ti-walk"></i><span>自取</span>
-          </button>
-          <button class="delivery-btn" id="sn-delivery" onclick="selectShipping('delivery')">
-            <i class="ti ti-truck"></i><span>宅配</span>
-          </button>
-          <button class="delivery-btn" id="sn-personal" onclick="selectShipping('personal')">
-            <i class="ti ti-user-check"></i><span>親送</span>
-          </button>
-        </div>
-        <div class="cust-field" style="margin-top:10px;">
-          <label>寄貨日期</label>
-          <input type="date" id="sn-ship-date" />
-        </div>
-        <div class="cust-field" id="sn-logistics-section">
-          <label>物流公司</label>
-          <input type="text" id="sn-logistics" placeholder="例：黑貓、新竹、郵局..." />
-        </div>
-        <div class="cust-field" id="sn-tracking-section">
-          <label>物流單號</label>
-          <input type="text" id="sn-tracking" placeholder="輸入物流追蹤單號..." />
-        </div>
-      </div>
-
-      <!-- 出貨單預覽 -->
-      <div class="section-title"><i class="ti ti-eye"></i> 預覽</div>
-      <div class="shipping-preview-wrap" id="shipping-preview"></div>
-
-      <button class="confirm-btn" style="background:#6B4FBB;margin-top:12px;" onclick="printShippingNote()">
-        <i class="ti ti-printer"></i> 列印 / 存成 PDF
-      </button>
-    </div>
+    <!-- 其他頁面由各模組 JS 動態插入或使用預留容器 -->
+    <div class="page" id="page-sale-report"></div>
+    <div class="page" id="page-purchase-report"></div>
+    <div class="page" id="page-finance"></div>
+    <div class="page" id="page-unpaid"></div>
+    <div class="page" id="page-admin-products"></div>
+    <div class="page" id="page-admin-bom"></div>
+    <div class="page" id="page-admin-bom-edit"></div>
+    <div class="page" id="page-admin-suppliers"></div>
+    <div class="page" id="page-admin-locations"></div>
+    <div class="page" id="page-admin-import"></div>
+    <div class="page" id="page-estimate-detail"></div>
+    <div class="page" id="page-order-detail"></div>
+    <div class="page" id="page-order-edit"></div>
+    <div class="page" id="page-production-detail"></div>
+    <div class="page" id="page-production-edit"></div>
+    <div class="page" id="page-event-detail"></div>
+    <div class="page" id="page-event-edit"></div>
+    <div class="page" id="page-event-review"></div>
+    <div class="page" id="page-shipping-note"></div>
+    <div class="page" id="page-gift-orders"></div>
+    <div class="page" id="page-customer-edit"></div>
+    <div class="page" id="page-customer-detail"></div>
+    <div class="page" id="page-transfer-edit"></div>
 
   </main>
 
-  <!-- Bottom Nav -->
-  <nav class="bottom-nav" role="navigation" aria-label="主選單">
+  <!-- 底部導覽列 -->
+  <nav class="bottom-nav">
     <button class="nav-item active" id="nav-home" onclick="showPage('home')">
-      <i class="ti ti-home"></i><span>首頁</span>
+      <i class="ti ti-layout-dashboard"></i>
+      <span>首頁</span>
     </button>
     <button class="nav-item" id="nav-factory" onclick="showPage('factory-menu')">
-      <i class="ti ti-building-factory-2"></i><span>工廠</span>
+      <i class="ti ti-building-factory-2"></i>
+      <span>工廠</span>
     </button>
-    <button class="nav-item" id="nav-inventory" onclick="showPage('inventory')" aria-label="查看庫存">
-      <div class="nav-scan-circle"><i class="ti ti-clipboard-list"></i></div>
+    <button class="nav-item nav-center" id="nav-inventory" onclick="showPage('inventory')">
+      <i class="ti ti-packages"></i>
+      <span>庫存</span>
     </button>
     <button class="nav-item" id="nav-sales" onclick="showPage('sales-menu')">
-      <i class="ti ti-shopping-cart"></i><span>銷售</span>
+      <i class="ti ti-shopping-cart"></i>
+      <span>銷售</span>
     </button>
     <button class="nav-item" id="nav-admin" onclick="showPage('admin')">
-      <i class="ti ti-tool"></i><span>管理</span>
+      <i class="ti ti-tool"></i>
+      <span>管理</span>
     </button>
   </nav>
 
-  <!-- 新增客戶表單 Modal（全域共用） -->
-  <div class="modal-overlay" id="newCustomerModal" style="display:none;" onclick="closeNewCustomerModal(event)">
-    <div class="supplier-modal" style="max-height:88vh;overflow-y:auto;">
-      <div class="supplier-modal-title"><i class="ti ti-user-plus"></i> 新增客戶</div>
-      <div class="cust-form">
-        <!-- 聯絡資訊 -->
-        <div class="cust-form-section">聯絡資訊</div>
-        <div class="cust-field">
-          <label>公司名稱 / 客戶姓名 *</label>
-          <input type="text" id="nc-name" placeholder="公司名稱或客戶姓名" />
-        </div>
-        <div class="cust-field">
-          <label>承辦人</label>
-          <input type="text" id="nc-contact" placeholder="承辦人姓名" />
-        </div>
-        <div class="cust-field">
-          <label>承辦電話</label>
-          <input type="tel" id="nc-tel" placeholder="02-xxxx-xxxx 或 09xx-xxxxxx" />
-        </div>
-        <div class="cust-field">
-          <label>E-mail</label>
-          <input type="email" id="nc-email" placeholder="email@example.com" />
-        </div>
-        <div class="cust-field">
-          <label>傳真號碼</label>
-          <input type="tel" id="nc-fax" placeholder="02-xxxx-xxxx" />
-        </div>
-        <!-- 發票資訊 -->
-        <div class="cust-form-section">發票資訊</div>
-        <div class="cust-field">
-          <label>公司抬頭</label>
-          <input type="text" id="nc-company-title" placeholder="發票抬頭（公司全名）" />
-        </div>
-        <div class="cust-field">
-          <label>統一編號</label>
-          <input type="text" id="nc-tax-id" placeholder="12345678" maxlength="8" />
-        </div>
-        <!-- 收件資訊 -->
-        <div class="cust-form-section">收件資訊</div>
-        <div class="cust-field">
-          <label>收件人</label>
-          <input type="text" id="nc-receiver" placeholder="收件人姓名" />
-        </div>
-        <div class="cust-field">
-          <label>收件電話</label>
-          <input type="tel" id="nc-receiver-tel" placeholder="09xx-xxxxxx" />
-        </div>
-        <div class="cust-field">
-          <label>收件地址</label>
-          <input type="text" id="nc-addr" placeholder="完整收件地址" />
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-        <button class="modal-ok-btn" onclick="saveNewCustomer()"><i class="ti ti-check"></i> 儲存</button>
-        <button class="modal-cancel-btn" onclick="closeNewCustomerModal()">取消</button>
-      </div>
+</div><!-- #app -->
+
+<!-- ════════════════════════════════════════════
+     全域 Modals
+════════════════════════════════════════════ -->
+
+<!-- 提升權限 Modal（方案B）-->
+<div class="modal-overlay" id="escalateModal" style="display:none;" onclick="closeEscalateModal(event)">
+  <div class="modal-card" style="max-width:320px;">
+    <div class="modal-title" id="escalate-title">主管權限驗證</div>
+    <div id="escalate-reason" style="font-size:13px;color:var(--text2);margin-bottom:14px;"></div>
+    <div class="cust-field">
+      <label>請輸入 PIN 碼</label>
+      <input type="password" id="escalate-pin-input"
+        style="font-size:28px;letter-spacing:8px;text-align:center;"
+        maxlength="8" autocomplete="off" />
+    </div>
+    <div id="escalate-pin-error"
+      style="display:none;color:var(--red);font-size:13px;text-align:center;margin-top:6px;">
+      PIN 碼錯誤，請再試一次
+    </div>
+    <div class="modal-actions">
+      <button class="modal-ok-btn" onclick="submitEscalatePin()">
+        <i class="ti ti-arrow-right"></i> 確認
+      </button>
+      <button class="modal-cancel-btn" onclick="closeEscalateModal()">取消</button>
     </div>
   </div>
-
-  <!-- 製程訂單客戶選擇 Modal -->
-  <div class="modal-overlay" id="procCustomerModal" style="display:none;" onclick="closeProcCustomerModal(event)">
-    <div class="supplier-modal">
-      <div class="supplier-modal-title"><i class="ti ti-users"></i> 選擇客戶</div>
-      <div class="supplier-search-row">
-        <i class="ti ti-search"></i>
-        <input type="search" id="procCustomerSearch" placeholder="搜尋客戶..." oninput="filterProcCustomerList(this.value)" />
-      </div>
-      <div class="supplier-list" id="procCustomerPickList"></div>
-    </div>
-  </div>
-
-  <!-- 廠商編輯 Modal -->
-  <div class="modal-overlay" id="supEditModal" style="display:none;" onclick="closeSupEditModal(event)">
-    <div class="supplier-modal" style="max-height:88vh;overflow-y:auto;">
-      <div class="supplier-modal-title"><i class="ti ti-building-store"></i> 廠商資料</div>
-      <div class="cust-form">
-        <div class="cust-form-section" style="border-top:none;padding-top:0;margin-top:0;">基本資訊</div>
-        <div class="cust-field"><label>廠商編號 *</label><input type="text" id="sup-id" placeholder="例：ㄐ001" /></div>
-        <div class="cust-field"><label>廠商名稱 *</label><input type="text" id="sup-name" placeholder="廠商全名" /></div>
-        <div class="cust-field"><label>聯絡人</label><input type="text" id="sup-contact" placeholder="業務或聯絡人姓名" /></div>
-        <div class="cust-field"><label>電話</label><input type="tel" id="sup-tel" placeholder="02-xxxx-xxxx" /></div>
-        <div class="cust-field"><label>Email</label><input type="email" id="sup-email" placeholder="email@example.com" /></div>
-        <div class="cust-field"><label>傳真</label><input type="tel" id="sup-fax" placeholder="02-xxxx-xxxx" /></div>
-        <div class="cust-form-section">付款資訊</div>
-        <div class="cust-field"><label>銀行名稱</label><input type="text" id="sup-bank" placeholder="例：玉山銀行草屯分行" /></div>
-        <div class="cust-field"><label>帳號</label><input type="text" id="sup-account" placeholder="銀行帳號" /></div>
-        <div class="cust-field"><label>備註</label><input type="text" id="sup-note" placeholder="備註" /></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-        <button class="modal-ok-btn" onclick="saveSupplier()"><i class="ti ti-check"></i> 儲存</button>
-        <button class="modal-cancel-btn" onclick="closeSupEditModal()">取消</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 商品編輯 Modal -->
-  <div class="modal-overlay" id="productEditModal" style="display:none;" onclick="closeProductEditModal(event)">
-    <div class="supplier-modal">
-      <div class="supplier-modal-title"><i class="ti ti-package"></i> 商品資料</div>
-      <div class="cust-form">
-        <div class="cust-field"><label>商品編號 *</label><input type="text" id="prod-edit-id" placeholder="例：F21" /></div>
-        <div class="cust-field"><label>商品名稱 *</label><input type="text" id="prod-edit-name" placeholder="商品名稱" /></div>
-        <div class="cust-field"><label>圖示 Emoji</label><input type="text" id="prod-edit-emoji" placeholder="📦" maxlength="2" /></div>
-        <div class="cust-field"><label>售價（元）</label><input type="number" id="prod-edit-price" placeholder="0" min="0" /></div>
-        <div class="cust-field"><label>安全庫存量</label><input type="number" id="prod-edit-min" placeholder="0" min="0" /></div>
-        <div class="cust-field"><label>目前庫存量</label><input type="number" id="prod-edit-qty" placeholder="0" min="0" /></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-        <button class="modal-ok-btn" onclick="saveProduct()"><i class="ti ti-check"></i> 儲存</button>
-        <button class="modal-cancel-btn" onclick="closeProductEditModal()">取消</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 每日帶貨設定 Modal -->
-  <div class="modal-overlay" id="dayQtyModal" style="display:none;" onclick="closeDayQtyModal(event)">
-    <div class="supplier-modal" style="max-height:88vh;overflow-y:auto;">
-      <div class="supplier-modal-title"><i class="ti ti-package"></i> <span id="day-qty-title">帶貨設定</span></div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">
-        <i class="ti ti-calendar"></i> <span id="day-qty-date"></span>
-      </div>
-      <div class="supplier-label" style="margin-bottom:8px;">設定今天帶出去的每樣商品數量：</div>
-      <div id="day-qty-list"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-        <button class="modal-ok-btn" onclick="saveDayQty()"><i class="ti ti-check"></i> 儲存</button>
-        <button class="modal-cancel-btn" onclick="closeDayQtyModal()">取消</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 登入 PIN Modal -->
-  <div class="modal-overlay" id="loginPinModal" style="display:none;">
-    <div class="supplier-modal" style="max-width:320px;">
-      <div class="supplier-modal-title" id="login-pin-title">登入</div>
-      <div class="cust-field">
-        <label>請輸入 PIN 碼</label>
-        <input type="password" id="login-pin-input" placeholder="輸入 PIN"
-          style="font-size:28px;letter-spacing:8px;text-align:center;" maxlength="8" />
-      </div>
-      <div id="login-pin-error" style="display:none;color:#E24B4A;font-size:13px;margin-top:6px;text-align:center;">
-        PIN 碼錯誤，請再試一次
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-        <button class="modal-ok-btn" onclick="submitLoginPin()"><i class="ti ti-arrow-right"></i> 登入</button>
-        <button class="modal-cancel-btn" onclick="closeLoginPinModal()">取消</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 主管驗證 Modal -->
-  <div class="modal-overlay" id="adminAuthModal" style="display:none;">
-    <div class="supplier-modal" style="max-width:320px;">
-      <div class="supplier-modal-title"><i class="ti ti-lock"></i> 主管驗證</div>
-      <div id="admin-reason" style="font-size:13px;color:var(--text2);margin-bottom:14px;"></div>
-      <div class="cust-field">
-        <label>請輸入主管密碼</label>
-        <input type="password" id="admin-pin-input" placeholder="輸入密碼"
-          style="font-size:24px;letter-spacing:6px;text-align:center;"
-          maxlength="8" />
-      </div>
-      <div id="admin-pin-error" style="display:none;color:#E24B4A;font-size:13px;margin-top:6px;text-align:center;">
-        密碼錯誤，請再試一次
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-        <button class="modal-ok-btn" onclick="submitAdminPin()"><i class="ti ti-check"></i> 確認</button>
-        <button class="modal-cancel-btn" onclick="closeAdminModal()">取消</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 修改 PIN Modal（管理員專用）-->
-  <div class="modal-overlay" id="changePinModal" style="display:none;" onclick="closeChangePinModal(event)">
-    <div class="supplier-modal" style="max-width:320px;">
-      <div class="supplier-modal-title"><i class="ti ti-key"></i> 修改 PIN 碼</div>
-      <div class="cust-form">
-        <div class="cust-field">
-          <label>修改哪個角色的 PIN</label>
-          <select id="change-pin-role" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);">
-            <option value="manager">主管（4位以上）</option>
-            <option value="admin">管理員（6位以上）</option>
-          </select>
-        </div>
-        <div class="cust-field"><label>新 PIN 碼</label><input type="password" id="new-pin-val" placeholder="輸入新 PIN" maxlength="8" /></div>
-        <div class="cust-field"><label>確認新 PIN 碼</label><input type="password" id="new-pin-confirm-val" placeholder="再輸入一次" maxlength="8" /></div>
-      </div>
-      <div id="pin-change-error" style="display:none;color:#E24B4A;font-size:13px;margin-top:6px;"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-        <button class="modal-ok-btn" onclick="submitChangePin()"><i class="ti ti-check"></i> 確認修改</button>
-        <button class="modal-cancel-btn" onclick="closeChangePinModal()">取消</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast -->
-  <div class="toast" id="toast" role="alert" aria-live="polite"></div>
-
 </div>
 
-<!-- jsQR for barcode scanning -->
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<!-- 修改 PIN Modal -->
+<div class="modal-overlay" id="changePinModal" style="display:none;" onclick="closeChangePinModal(event)">
+  <div class="modal-card" style="max-width:320px;">
+    <div class="modal-title"><i class="ti ti-key"></i> 修改 PIN 碼</div>
+    <div class="cust-form">
+      <div class="cust-field">
+        <label>修改哪個角色</label>
+        <select id="change-pin-role" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);">
+          <option value="manager">主管（4位以上）</option>
+          <option value="admin">管理員（6位以上）</option>
+        </select>
+      </div>
+      <div class="cust-field">
+        <label>新 PIN 碼</label>
+        <input type="password" id="new-pin-val" maxlength="8" />
+      </div>
+      <div class="cust-field">
+        <label>確認新 PIN 碼</label>
+        <input type="password" id="new-pin-confirm-val" maxlength="8" />
+      </div>
+    </div>
+    <div id="pin-change-error" style="display:none;color:var(--red);font-size:13px;margin-top:6px;"></div>
+    <div class="modal-actions">
+      <button class="modal-ok-btn" onclick="submitChangePin()"><i class="ti ti-check"></i> 確認</button>
+      <button class="modal-cancel-btn" onclick="closeChangePinModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 客戶選擇 Modal -->
+<div class="modal-overlay" id="customerPickerModal" style="display:none;" onclick="closeCustomerPicker(event)">
+  <div class="modal-card">
+    <div class="modal-title"><i class="ti ti-users"></i> 選擇客戶</div>
+    <div class="search-bar" style="margin-bottom:10px;">
+      <i class="ti ti-search"></i>
+      <input type="search" id="customer-picker-search"
+        placeholder="搜尋客戶..."
+        oninput="renderCustomerPickerList(this.value)" />
+    </div>
+    <div id="customer-picker-list" style="max-height:50vh;overflow-y:auto;"></div>
+    <button class="modal-cancel-btn" style="margin-top:10px;width:100%;"
+      onclick="closeCustomerPicker()">取消</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<!-- Scripts（載入順序很重要）-->
 <script src="js/data.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/logger.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/admin.js"></script>
-<script src="js/smartsearch.js"></script>
+<script src="js/locations.js"></script>
+<script src="js/inventory.js"></script>
 <script src="js/firebase.js"></script>
-<script src="js/app.js"></script>
-<script src="js/order.js"></script>
+<script src="js/customers.js"></script>
+<script src="js/smartsearch.js"></script>
+<script src="js/inventory_ui.js"></script>
+<script src="js/home.js"></script>
+<script src="js/estimates.js"></script>
+<script src="js/orders.js"></script>
+<script src="js/production.js"></script>
+<script src="js/purchase.js"></script>
+<script src="js/transfer.js"></script>
 <script src="js/pos.js"></script>
-<script src="js/estimate.js"></script>
+<script src="js/storeB.js"></script>
+<script src="js/events.js"></script>
 <script src="js/report.js"></script>
-<script src="js/process.js"></script>
-<script src="js/event.js"></script>
-<script src="js/event_offline.js"></script>
+
 </body>
 </html>

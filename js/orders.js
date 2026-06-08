@@ -1,0 +1,638 @@
+// ============================================================
+// orders.js — 正式訂單管理
+// ============================================================
+
+let orders = JSON.parse(localStorage.getItem('erp_orders') || '[]');
+
+function saveOrders(){
+  localStorage.setItem('erp_orders', JSON.stringify(orders));
+  if(typeof pushToFirebase === 'function') pushToFirebase('orders', orders);
+}
+
+function getOrder(id){ return orders.find(o => o.id === id) || null; }
+
+function genOrderNo(){
+  return genNo('SO', orders, 'no');
+}
+
+// ── 訂單狀態 ──
+const ORDER_STATUS = {
+  pending:   { label:'待處理', cls:'badge-pending',   icon:'ti-clock' },
+  producing: { label:'生產中', cls:'badge-active',    icon:'ti-player-play' },
+  ready:     { label:'待出貨', cls:'badge-done',      icon:'ti-package' },
+  shipped:   { label:'已出貨', cls:'badge-shipped',   icon:'ti-truck' },
+  archived:  { label:'已結案', cls:'badge-archived',  icon:'ti-archive' },
+};
+
+const PAY_STATUS = {
+  unpaid:  { label:'未收款',   cls:'pay-badge-unpaid' },
+  partial: { label:'部分收款', cls:'pay-badge-partial' },
+  paid:    { label:'已收款',   cls:'pay-badge-paid' },
+};
+
+function orderStatusBadge(status){
+  const s = ORDER_STATUS[status] || ORDER_STATUS.pending;
+  return `<span class="status-badge ${s.cls}"><i class="ti ${s.icon}"></i> ${s.label}</span>`;
+}
+
+function payStatusBadge(status){
+  const s = PAY_STATUS[status] || PAY_STATUS.unpaid;
+  return `<span class="status-badge ${s.cls}">${s.label}</span>`;
+}
+
+// ── 列表 ──
+let _orderFilter = 'all';
+
+function renderOrderList(filter){
+  _orderFilter = filter || 'all';
+  document.querySelectorAll('#page-orders .ftab').forEach((btn, i) => {
+    const filters = ['all','pending','producing','ready','shipped','archived'];
+    btn.classList.toggle('active', filters[i] === _orderFilter);
+  });
+
+  const el = document.getElementById('order-list');
+  if(!el) return;
+  let list = _orderFilter === 'all'
+    ? orders
+    : orders.filter(o => o.status === _orderFilter);
+  list = list.slice().reverse();
+
+  if(!list.length){
+    el.innerHTML = `<div class="order-empty">沒有符合的訂單</div>`;
+    return;
+  }
+
+  el.innerHTML = list.map(o => {
+    const cust     = getCustomer(o.customerId);
+    const itemsStr = (o.items||[]).slice(0,2).map(i=>i.name).join('、')
+      + ((o.items||[]).length > 2 ? ` 等${o.items.length}項` : '');
+    return `<div class="list-card" onclick="showOrderDetail('${o.id}')">
+      <div class="list-card-top">
+        <span class="list-card-no">${o.no}</span>
+        <div style="display:flex;gap:6px;">
+          ${orderStatusBadge(o.status)}
+          ${payStatusBadge(o.payStatus)}
+        </div>
+      </div>
+      <div class="list-card-meta">
+        ${cust ? `<span><i class="ti ti-user"></i>${cust.name}</span>` : ''}
+        <span><i class="ti ti-calendar"></i>${fmtDate(o.createdAt)}</span>
+        ${o.deliveryDate ? `<span><i class="ti ti-clock"></i>交期 ${fmtDate(o.deliveryDate)}</span>` : ''}
+        ${o.estimateRef  ? `<span><i class="ti ti-link"></i>${o.estimateRef}</span>` : ''}
+      </div>
+      <div class="list-card-items">${itemsStr || '無品項'}</div>
+      <div class="list-card-footer">
+        <span class="list-card-amount">${fmtMoney(o.totalAmount)}</span>
+        <span style="font-size:12px;color:var(--text3);">${deliveryLabel(o.delivery)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 從估價單建立訂單 ──
+function newOrderFromEstimate(estimate){
+  const o = {
+    id:          null,
+    no:          genOrderNo(),
+    source:      'phone',
+    estimateRef: estimate.no,
+    estimateId:  estimate.id,
+    customerId:  estimate.customerId,
+    items:       estimate.items.map(i => ({
+      id:            i.id,
+      name:          i.name,
+      emoji:         i.emoji,
+      qty:           i.qty,
+      originalPrice: i.originalPrice,
+      unitPrice:     i.unitPrice,
+      discount:      i.discount || null,
+      shippedQty:    0,
+      producedQty:   0,
+    })),
+    subtotal:      estimate.subtotal,
+    totalAmount:   estimate.total,
+    orderDiscount: estimate.discount,
+    deposit:       0,
+    depositPaid:   false,
+    paidAmount:    0,
+    payStatus:     'unpaid',
+    delivery:      estimate.delivery,
+    logistics:     '',
+    trackingNo:    '',
+    deliveryDate:  '',
+    shippedAt:     '',
+    remark:        estimate.remark || '',
+    status:        'pending',
+    createdAt:     todayStr(),
+    updatedAt:     todayStr(),
+  };
+
+  _currentOrder = o;
+  renderOrderEditPage();
+  showPage('order-edit');
+
+  // 標記估價單為已轉單
+  const est = estimates?.find(e => e.id === estimate.id);
+  if(est){
+    est.status = 'converted';
+    saveEstimates();
+  }
+}
+
+// ── 手動新增訂單 ──
+function newOrder(){
+  _currentOrder = {
+    id:          null,
+    no:          genOrderNo(),
+    source:      'phone',
+    estimateRef: '',
+    estimateId:  null,
+    customerId:  null,
+    items:       [],
+    subtotal:    0,
+    totalAmount: 0,
+    orderDiscount: { type:'none', value:0 },
+    deposit:     0,
+    depositPaid: false,
+    paidAmount:  0,
+    payStatus:   'unpaid',
+    delivery:    'delivery',
+    logistics:   '',
+    trackingNo:  '',
+    deliveryDate:'',
+    shippedAt:   '',
+    remark:      '',
+    status:      'pending',
+    createdAt:   todayStr(),
+    updatedAt:   todayStr(),
+  };
+  renderOrderEditPage();
+  showPage('order-edit');
+}
+
+// ── 訂單編輯頁 ──
+let _currentOrder = null;
+
+function renderOrderEditPage(){
+  const page = document.getElementById('page-order-edit');
+  if(!page) return;
+  const o    = _currentOrder;
+  const cust = getCustomer(o.customerId);
+  const isLocked = o.status === 'archived';
+
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('orders')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title">${o.id ? o.no : '新增訂單'}</div>
+      ${!isLocked
+        ? `<button class="small-btn green-btn" onclick="saveOrderDraft()">
+             <i class="ti ti-device-floppy"></i> 儲存
+           </button>`
+        : `<span class="status-badge badge-archived" style="font-size:12px;">
+             <i class="ti ti-lock"></i> 已結案
+           </span>`}
+    </div>
+
+    <div class="form-card">
+      <!-- 單號 / 來源估價單 -->
+      <div class="form-meta-row">
+        <span class="form-no">${o.no}</span>
+        <span class="form-date">${fmtDate(o.createdAt)}</span>
+      </div>
+      ${o.estimateRef ? `
+      <div style="padding:8px 12px;background:var(--purple-light);border-radius:var(--radius-sm);
+        font-size:13px;color:var(--purple);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+        <i class="ti ti-link"></i> 來源估價單：${o.estimateRef}
+      </div>` : ''}
+
+      <!-- 訂單來源 -->
+      <div class="cust-field">
+        <label>訂單來源</label>
+        <select id="ord-source" ${isLocked?'disabled':''}>
+          <option value="phone"  ${o.source==='phone'  ?'selected':''}>電話</option>
+          <option value="online" ${o.source==='online' ?'selected':''}>網路</option>
+          <option value="walkin" ${o.source==='walkin' ?'selected':''}>門市</option>
+        </select>
+      </div>
+
+      <!-- 客戶 -->
+      <div class="form-section-title">客戶</div>
+      <button class="customer-select-btn" ${isLocked?'disabled':''}
+        onclick="openCustomerPicker('order')">
+        <i class="ti ti-user"></i>
+        <span id="ord-customer-name">${cust ? cust.name : '選擇客戶'}</span>
+        <i class="ti ti-chevron-right" style="margin-left:auto;"></i>
+      </button>
+      ${cust ? `<div class="customer-info-box" style="margin-top:6px;">
+        ${[cust.contact?`👤 ${cust.contact}`:'', cust.tel?`📞 ${cust.tel}`:''].filter(Boolean).join('<br>')}
+      </div>` : ''}
+
+      <!-- 品項 -->
+      <div class="form-section-title" style="margin-top:14px;">品項</div>
+      ${!isLocked ? `<div class="search-bar">
+        <i class="ti ti-search"></i>
+        <input type="search" id="order-item-search" placeholder="搜尋商品加入..."
+          oninput="searchItemsFor('order',this.value)" />
+      </div>
+      <div id="order-item-search-result" style="display:none;"></div>` : ''}
+      <div class="order-list-header">
+        <span class="order-list-title">品項清單</span>
+        <span class="order-count" id="ord-item-count">${o.items.length} 項</span>
+      </div>
+      <div class="order-list" id="ord-item-list"></div>
+
+      <!-- 金額 -->
+      <div class="form-section-title" style="margin-top:14px;">金額</div>
+      <div class="amount-section">
+        <div class="amount-row"><span>小計</span><span id="ord-subtotal">${fmtMoney(o.subtotal)}</span></div>
+        <div class="amount-row discount-row">
+          <span>整單折扣</span>
+          <div class="discount-ctrl">
+            <select id="ord-discount-type" ${isLocked?'disabled':''} onchange="calcOrderTotal()">
+              <option value="none"    ${o.orderDiscount?.type==='none'   ?'selected':''}>無折扣</option>
+              <option value="percent" ${o.orderDiscount?.type==='percent'?'selected':''}>% 折扣</option>
+              <option value="amount"  ${o.orderDiscount?.type==='amount' ?'selected':''}>$ 折抵</option>
+            </select>
+            <input type="number" id="ord-discount-value"
+              value="${o.orderDiscount?.value||0}" min="0"
+              ${isLocked?'disabled':''} onchange="calcOrderTotal()"
+              style="width:70px;" />
+          </div>
+        </div>
+        <div class="amount-row grand">
+          <span>訂單總金額</span><strong id="ord-total">${fmtMoney(o.totalAmount)}</strong>
+        </div>
+      </div>
+
+      <!-- 付款 -->
+      <div class="form-section-title" style="margin-top:14px;">付款</div>
+      <div class="amount-section">
+        <div class="amount-row">
+          <span>訂金</span>
+          <input type="number" id="ord-deposit" value="${o.deposit||0}" min="0"
+            ${isLocked?'disabled':''} onchange="updateOrderPay()"
+            style="width:100px;padding:5px 8px;font-size:15px;border:1px solid var(--border);
+            border-radius:6px;text-align:right;background:var(--bg);color:var(--text);" />
+        </div>
+        <div class="amount-row">
+          <span>訂金已收</span>
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="ord-deposit-paid" ${o.depositPaid?'checked':''}
+              ${isLocked?'disabled':''} onchange="updateOrderPay()" />
+            <span>已收</span>
+          </label>
+        </div>
+        <div class="amount-row">
+          <span>付款狀態</span>
+          <div style="display:flex;gap:6px;">
+            ${['unpaid','partial','paid'].map(ps => {
+              const labels = { unpaid:'未收款', partial:'部分收款', paid:'已收款' };
+              return `<button class="pay-status-btn ${o.payStatus===ps?'active':''}"
+                id="ord-pay-${ps}" ${isLocked?'disabled':''}
+                onclick="setOrderPayStatus('${ps}')">
+                ${labels[ps]}
+              </button>`;
+            }).join('')}
+          </div>
+        </div>
+        <div id="ord-partial-row" style="display:${o.payStatus==='partial'?'flex':'none'};"
+          class="amount-row">
+          <span>已收金額</span>
+          <input type="number" id="ord-paid-amount" value="${o.paidAmount||0}" min="0"
+            ${isLocked?'disabled':''}
+            style="width:100px;padding:5px 8px;font-size:15px;border:1px solid var(--border);
+            border-radius:6px;text-align:right;background:var(--bg);color:var(--text);" />
+        </div>
+      </div>
+
+      <!-- 出貨資訊 -->
+      <div class="form-section-title" style="margin-top:14px;">出貨資訊</div>
+      <div class="delivery-btns">
+        <button class="delivery-btn ${o.delivery==='pickup'  ?'active':''}"
+          id="ord-dm-pickup"   ${isLocked?'disabled':''} onclick="setOrderDelivery('pickup')">
+          <i class="ti ti-walk"></i> 自取
+        </button>
+        <button class="delivery-btn ${o.delivery==='delivery'?'active':''}"
+          id="ord-dm-delivery" ${isLocked?'disabled':''} onclick="setOrderDelivery('delivery')">
+          <i class="ti ti-truck"></i> 宅配
+        </button>
+        <button class="delivery-btn ${o.delivery==='personal'?'active':''}"
+          id="ord-dm-personal" ${isLocked?'disabled':''} onclick="setOrderDelivery('personal')">
+          <i class="ti ti-user-check"></i> 親送
+        </button>
+      </div>
+      <div class="cust-field" style="margin-top:10px;">
+        <label>客戶要求交期</label>
+        <input type="date" id="ord-delivery-date" value="${o.deliveryDate||''}"
+          ${isLocked?'disabled':''} />
+      </div>
+      <div class="cust-field">
+        <label>物流平台</label>
+        <input type="text" id="ord-logistics" value="${o.logistics||''}"
+          placeholder="黑貓 / 7-11 / 蝦皮 / 郵局..."
+          ${isLocked?'disabled':''} />
+      </div>
+      <div class="cust-field">
+        <label>物流單號</label>
+        <input type="text" id="ord-tracking" value="${o.trackingNo||''}"
+          placeholder="填入物流追蹤單號..."
+          ${isLocked?'disabled':''} />
+      </div>
+      <div class="cust-field">
+        <label>備註</label>
+        <textarea id="ord-remark" rows="2" ${isLocked?'disabled':''}>${o.remark||''}</textarea>
+      </div>
+    </div>
+
+    <!-- 操作按鈕 -->
+    ${!isLocked ? `
+    <button class="confirm-btn" style="background:var(--purple);margin-top:4px;"
+      onclick="confirmOrder()">
+      <i class="ti ti-check"></i> 確認訂單
+    </button>` : ''}
+    ${o.status === 'ready' ? `
+    <button class="confirm-btn" style="background:var(--green);margin-top:8px;"
+      onclick="shipOrder('${o.id}')">
+      <i class="ti ti-truck"></i> 標記出貨
+    </button>` : ''}
+    ${o.status === 'shipped' ? `
+    <button class="confirm-btn" style="background:#185FA5;margin-top:8px;"
+      onclick="archiveOrder('${o.id}')">
+      <i class="ti ti-archive"></i> 結案
+    </button>` : ''}`;
+
+  renderOrderItems();
+}
+
+// ── 客戶選擇（給 order）──
+function selectCustomerForOrder(id){
+  if(!_currentOrder) return;
+  _currentOrder.customerId = id;
+  renderOrderEditPage();
+}
+
+// ── 品項管理 ──
+function addOrderItem(productId){
+  const item = getItem(productId);
+  if(!item) return;
+  const existing = _currentOrder.items.find(i => i.id === productId);
+  if(existing){ existing.qty++; }
+  else {
+    _currentOrder.items.push({
+      id:            productId,
+      name:          item.name,
+      emoji:         item.emoji,
+      qty:           1,
+      originalPrice: item.salePrice,
+      unitPrice:     item.salePrice,
+      discount:      null,
+      shippedQty:    0,
+      producedQty:   0,
+    });
+  }
+  renderOrderItems();
+  calcOrderTotal();
+}
+
+function removeOrderItem(idx){
+  _currentOrder.items.splice(idx, 1);
+  renderOrderItems();
+  calcOrderTotal();
+}
+
+function changeOrderItemQty(idx, delta){
+  const item = _currentOrder.items[idx];
+  if(!item) return;
+  item.qty = Math.max(1, item.qty + delta);
+  renderOrderItems();
+  calcOrderTotal();
+}
+
+function changeOrderItemPrice(idx, val){
+  const item  = _currentOrder.items[idx];
+  if(!item) return;
+  item.unitPrice = parseInt(val) || 0;
+  item.discount  = item.unitPrice !== item.originalPrice
+    ? { type:'item', value: item.originalPrice - item.unitPrice, reason:'手動改價' }
+    : null;
+  calcOrderTotal();
+}
+
+function renderOrderItems(){
+  const el    = document.getElementById('ord-item-list');
+  const count = document.getElementById('ord-item-count');
+  if(!el || !_currentOrder) return;
+  const items    = _currentOrder.items;
+  const isLocked = _currentOrder.status === 'archived';
+  if(count) count.textContent = items.length + ' 項';
+  if(!items.length){
+    el.innerHTML = `<div class="order-empty">尚未加入品項</div>`;
+    return;
+  }
+  el.innerHTML = items.map((item, idx) => {
+    const isDis = item.unitPrice !== item.originalPrice;
+    return `<div class="order-row">
+      <div class="order-emoji">${item.emoji}</div>
+      <div class="order-info">
+        <div class="order-name">${item.name}</div>
+        <div class="order-id" style="display:flex;align-items:center;gap:6px;">
+          ${isDis?`<span style="text-decoration:line-through;color:var(--text3);font-size:11px;">$${item.originalPrice}</span>`:''}
+          ${isLocked
+            ? `<span style="font-weight:700;">$${item.unitPrice}</span>`
+            : `<input type="number" class="unit-price-input ${isDis?'discounted':''}"
+                value="${item.unitPrice}" min="0"
+                onchange="changeOrderItemPrice(${idx},this.value)"
+                onclick="this.select()" />`}
+        </div>
+      </div>
+      <div class="qty-ctrl">
+        ${isLocked
+          ? `<span class="qty-num">${item.qty}</span>`
+          : `<button class="qty-btn" onclick="changeOrderItemQty(${idx},-1)">−</button>
+             <span class="qty-num">${item.qty}</span>
+             <button class="qty-btn" onclick="changeOrderItemQty(${idx},1)">＋</button>`}
+      </div>
+      ${isLocked ? '' : `<button class="order-del" onclick="removeOrderItem(${idx})"><i class="ti ti-x"></i></button>`}
+    </div>`;
+  }).join('');
+}
+
+// ── 計算金額 ──
+function calcOrderTotal(){
+  if(!_currentOrder) return;
+  const subtotal  = _currentOrder.items.reduce((s,i) => s + i.unitPrice * i.qty, 0);
+  const discType  = document.getElementById('ord-discount-type')?.value  || 'none';
+  const discValue = parseInt(document.getElementById('ord-discount-value')?.value) || 0;
+  let total       = subtotal;
+  if(discType === 'percent') total = Math.round(subtotal * (1 - discValue/100));
+  if(discType === 'amount')  total = Math.max(0, subtotal - discValue);
+
+  _currentOrder.subtotal      = subtotal;
+  _currentOrder.totalAmount   = total;
+  _currentOrder.orderDiscount = { type: discType, value: discValue };
+
+  const subEl   = document.getElementById('ord-subtotal');
+  const totalEl = document.getElementById('ord-total');
+  if(subEl)   subEl.textContent   = fmtMoney(subtotal);
+  if(totalEl) totalEl.textContent = fmtMoney(total);
+}
+
+// ── 付款狀態 ──
+function setOrderPayStatus(status){
+  if(!_currentOrder) return;
+  _currentOrder.payStatus = status;
+  ['unpaid','partial','paid'].forEach(s => {
+    document.getElementById(`ord-pay-${s}`)?.classList.toggle('active', s === status);
+  });
+  const partialRow = document.getElementById('ord-partial-row');
+  if(partialRow) partialRow.style.display = status === 'partial' ? 'flex' : 'none';
+}
+
+function updateOrderPay(){
+  if(!_currentOrder) return;
+  _currentOrder.deposit      = parseInt(document.getElementById('ord-deposit')?.value) || 0;
+  _currentOrder.depositPaid  = document.getElementById('ord-deposit-paid')?.checked || false;
+}
+
+// ── 送貨方式 ──
+function setOrderDelivery(method){
+  if(!_currentOrder) return;
+  _currentOrder.delivery = method;
+  ['pickup','delivery','personal'].forEach(m =>
+    document.getElementById(`ord-dm-${m}`)?.classList.toggle('active', m === method));
+}
+
+// ── 收集表單資料 ──
+function collectOrderForm(){
+  if(!_currentOrder) return;
+  _currentOrder.source       = document.getElementById('ord-source')?.value       || 'phone';
+  _currentOrder.deliveryDate = document.getElementById('ord-delivery-date')?.value || '';
+  _currentOrder.logistics    = document.getElementById('ord-logistics')?.value.trim()    || '';
+  _currentOrder.trackingNo   = document.getElementById('ord-tracking')?.value.trim()     || '';
+  _currentOrder.remark       = document.getElementById('ord-remark')?.value.trim()       || '';
+  _currentOrder.paidAmount   = parseInt(document.getElementById('ord-paid-amount')?.value) || 0;
+  _currentOrder.updatedAt    = todayStr();
+  calcOrderTotal();
+  updateOrderPay();
+}
+
+// ── 儲存 ──
+function upsertOrder(){
+  if(!_currentOrder.id) _currentOrder.id = 'O' + Date.now();
+  const idx = orders.findIndex(o => o.id === _currentOrder.id);
+  const copy = JSON.parse(JSON.stringify(_currentOrder));
+  if(idx >= 0) orders[idx] = copy;
+  else         orders.push(copy);
+  saveOrders();
+  renderOrderList(_orderFilter);
+}
+
+function saveOrderDraft(){
+  collectOrderForm();
+  upsertOrder();
+  showToast('📝 訂單已儲存：' + _currentOrder.no);
+}
+
+function confirmOrder(){
+  if(!_currentOrder.customerId){ showToast('⚠️ 請先選擇客戶'); return; }
+  if(!_currentOrder.items.length){ showToast('⚠️ 請先加入品項'); return; }
+  collectOrderForm();
+  _currentOrder.status = 'pending';
+  upsertOrder();
+  showToast('✅ 訂單已確認：' + _currentOrder.no);
+  // 檢查庫存，決定是否需要生產
+  checkInventoryAndProduceIfNeeded(_currentOrder);
+}
+
+// ── 庫存檢查：現貨足夠→備貨，不足→建生產單 ──
+function checkInventoryAndProduceIfNeeded(order){
+  const needProduction = [];
+  order.items.forEach(item => {
+    const stock = getStock(item.id, getMainLocation()?.id || 'store_A');
+    if(stock >= item.qty){
+      // 現貨足夠，保留庫存（出貨時才扣）
+    } else {
+      // 庫存不足，需要生產
+      needProduction.push({ ...item, produceQty: item.qty - stock });
+    }
+  });
+
+  if(needProduction.length){
+    // 自動建立生產單
+    if(typeof newProductionFromOrder === 'function'){
+      newProductionFromOrder(order, needProduction);
+    }
+    _currentOrder.status = 'producing';
+    upsertOrder();
+    showToast(`📦 已建立生產單（${needProduction.length} 項商品庫存不足）`);
+  } else {
+    // 全部現貨，直接進入待出貨
+    _currentOrder.status = 'ready';
+    upsertOrder();
+    showToast('✅ 現貨充足，訂單進入待出貨');
+  }
+  showOrderDetail(_currentOrder.id);
+}
+
+// ── 出貨 ──
+function shipOrder(id){
+  const o = getOrder(id) || _currentOrder;
+  if(!o) return;
+  if(!confirm(`確定出貨訂單 ${o.no}？\n出貨後將扣除 A 門市庫存。`)) return;
+
+  const locId = getMainLocation()?.id || 'store_A';
+  const now   = nowStr();
+
+  // 扣庫存
+  o.items.forEach(item => {
+    adjustStock(item.id, locId, -item.qty, {
+      op:      'order_ship',
+      refId:   o.id,
+      refType: 'order',
+      note:    `訂單出貨 ${o.no}`,
+    });
+    item.shippedQty = item.qty;
+  });
+
+  o.status    = 'shipped';
+  o.shippedAt = now;
+  o.updatedAt = todayStr();
+
+  const idx = orders.findIndex(ord => ord.id === o.id);
+  if(idx >= 0) orders[idx] = o;
+  saveOrders();
+  renderOrderList(_orderFilter);
+  showToast('🚚 出貨完成：' + o.no);
+  showOrderDetail(o.id);
+}
+
+// ── 結案（付款完成 + 已出貨）──
+function archiveOrder(id){
+  const o = getOrder(id) || _currentOrder;
+  if(!o) return;
+  if(o.payStatus !== 'paid'){
+    if(!confirm('款項尚未全數收到，確定結案？')) return;
+  }
+  o.status    = 'archived';
+  o.updatedAt = todayStr();
+  const idx = orders.findIndex(ord => ord.id === o.id);
+  if(idx >= 0) orders[idx] = o;
+  saveOrders();
+  showToast('✅ 訂單已結案：' + o.no);
+  renderOrderList(_orderFilter);
+  showPage('orders');
+}
+
+// ── 訂單詳細頁 ──
+function showOrderDetail(id){
+  const o = getOrder(id);
+  if(!o) return;
+  _currentOrder = JSON.parse(JSON.stringify(o));
+  renderOrderEditPage();
+  showPage('order-edit');
+}
+
+// 初始化
+document.addEventListener('DOMContentLoaded', () => {
+  renderOrderList('all');
+});

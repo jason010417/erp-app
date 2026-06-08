@@ -1,282 +1,389 @@
-// ===== 銷貨明細 + 進貨明細查詢 =====
+// ============================================================
+// report.js — 報表：銷貨明細、進貨明細、財務總覽、週報
+// ============================================================
 
-// ── 銷貨相關操作類型 ──
-const SALE_OPS     = ['ship', 'POS出售', 'pos'];
-const PURCHASE_OPS = ['add', 'purchase', '進貨'];
+// ════════════════════════════════
+// 銷貨明細
+// ════════════════════════════════
+function renderSaleReport(){
+  const page = document.getElementById('page-sale-report');
+  if(!page) return;
+  const custId  = document.getElementById('sr-customer')?.value  || '';
+  const itemQ   = document.getElementById('sr-item')?.value.trim() || '';
+  const dateFrom= document.getElementById('sr-date-from')?.value  || '';
+  const dateTo  = document.getElementById('sr-date-to')?.value    || '';
 
-// ── 頁面初始化（每次進入時呼叫）──
-function initSaleReport(){
-  // 填入客戶下拉
-  const sel = document.getElementById('sale-filter-customer');
-  sel.innerHTML = '<option value="">全部客戶</option>';
-  // 從 estimate.js 共用的 customers 陣列
-  if(typeof customers !== 'undefined'){
-    customers.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.id; opt.textContent = c.name;
-      sel.appendChild(opt);
-    });
-  }
+  let rows = logs.filter(l => l.op === 'pos_sale' || l.op === 'order_ship');
+  if(custId)  rows = rows.filter(l => l.customerId === custId);
+  if(itemQ)   rows = rows.filter(l =>
+    l.productName?.toLowerCase().includes(itemQ.toLowerCase()) ||
+    l.productId?.toLowerCase().includes(itemQ.toLowerCase()));
+  rows = filterLogsByDate(rows, dateFrom, dateTo);
+
+  const totalQty = rows.reduce((s,l)=>s+(l.qty||0),0);
+  const totalAmt = rows.reduce((s,l)=>s+(l.amount||0),0);
+
+  document.getElementById('sr-stats').innerHTML = `
+    <div class="report-stat"><div class="rs-num" style="color:var(--purple);">${rows.length}</div><div class="rs-label">筆記錄</div></div>
+    <div class="report-stat"><div class="rs-num">${totalQty}</div><div class="rs-label">總數量</div></div>
+    <div class="report-stat"><div class="rs-num" style="color:var(--purple);">${fmtMoney(totalAmt)}</div><div class="rs-label">總金額</div></div>`;
+
+  document.getElementById('sr-list').innerHTML = rows.length
+    ? rows.slice().reverse().map(l => {
+        const cust = l.customerId ? getCustomer(l.customerId) : null;
+        return `<div class="inv-warn-row" style="cursor:default;">
+          <div>
+            <div style="font-size:14px;font-weight:600;">${l.emoji||''} ${l.productName||'—'}</div>
+            <div style="font-size:12px;color:var(--text3);">
+              ${cust?cust.name+' ・ ':''}${l.time||'—'}
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:16px;font-weight:700;color:var(--purple);">${fmtMoney(l.amount||0)}</div>
+            <div style="font-size:12px;color:var(--text3);">${l.qty||0} 個</div>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="order-empty">沒有符合的記錄</div>';
+}
+
+function initSaleReportPage(){
+  const page = document.getElementById('page-sale-report');
+  if(!page||page.innerHTML.trim()) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-chart-bar" style="color:var(--amber);"></i> 銷貨明細</div>
+      <button class="small-btn" onclick="exportSaleReport()"><i class="ti ti-download"></i> 匯出</button>
+    </div>
+    <div class="form-card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="cust-field"><label>客戶</label>
+          <select id="sr-customer" onchange="renderSaleReport()">
+            <option value="">全部客戶</option>
+            ${customers.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
+          </select></div>
+        <div class="cust-field"><label>品項</label>
+          <input type="search" id="sr-item" placeholder="品名或編號..."
+            oninput="renderSaleReport()" /></div>
+        <div class="cust-field"><label>開始日期</label>
+          <input type="date" id="sr-date-from" onchange="renderSaleReport()" /></div>
+        <div class="cust-field"><label>結束日期</label>
+          <input type="date" id="sr-date-to" onchange="renderSaleReport()" /></div>
+      </div>
+      <button onclick="clearReportFilter('sale')"
+        style="width:100%;padding:8px;font-size:13px;background:var(--bg);
+        color:var(--text2);border:1px solid var(--border);border-radius:6px;margin-top:4px;">
+        <i class="ti ti-x"></i> 清除篩選
+      </button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;" id="sr-stats"></div>
+    <div id="sr-list"></div>`;
   renderSaleReport();
 }
 
-function initPurchaseReport(){
-  // 填入廠商下拉
-  const sel = document.getElementById('purchase-filter-supplier');
-  sel.innerHTML = '<option value="">全部廠商</option>';
-  SUPPLIERS.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id; opt.textContent = s.name;
-    sel.appendChild(opt);
+// ════════════════════════════════
+// 進貨明細
+// ════════════════════════════════
+function renderPurchaseReport(){
+  const supId   = document.getElementById('pr-supplier')?.value  || '';
+  const itemQ   = document.getElementById('pr-item')?.value.trim() || '';
+  const dateFrom= document.getElementById('pr-date-from')?.value  || '';
+  const dateTo  = document.getElementById('pr-date-to')?.value    || '';
+
+  let list = purchases;
+  if(supId) list = list.filter(p => p.supplierId === supId);
+  if(dateFrom||dateTo) list = list.filter(p => {
+    if(dateFrom && p.createdAt < dateFrom) return false;
+    if(dateTo   && p.createdAt > dateTo)   return false;
+    return true;
   });
+
+  const totalCost = list.reduce((s,p)=>s+(p.totalCost||0),0);
+  document.getElementById('pr-stats').innerHTML = `
+    <div class="report-stat"><div class="rs-num">${list.length}</div><div class="rs-label">筆進貨</div></div>
+    <div class="report-stat"><div class="rs-num" style="color:var(--green);">${fmtMoney(totalCost)}</div><div class="rs-label">進貨金額</div></div>`;
+
+  document.getElementById('pr-list').innerHTML = list.length
+    ? list.slice().reverse().map(pu => {
+        const sup = SUPPLIERS.find(s=>s.id===pu.supplierId);
+        return `<div class="list-card" style="margin-bottom:8px;">
+          <div class="list-card-top">
+            <span class="list-card-no">${pu.no}</span>
+            <span style="font-size:12px;color:var(--text3);">${fmtDate(pu.createdAt)}</span>
+          </div>
+          <div class="list-card-meta">
+            ${sup?`<span><i class="ti ti-building-store"></i>${sup.name}</span>`:''}
+            <span><i class="ti ti-package"></i>${pu.items.length} 種</span>
+          </div>
+          <div class="list-card-footer">
+            <span>${pu.items.slice(0,2).map(i=>i.name).join('、')}</span>
+            <span style="font-weight:700;">${fmtMoney(pu.totalCost)}</span>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="order-empty">沒有符合的記錄</div>';
+}
+
+function initPurchaseReportPage(){
+  const page = document.getElementById('page-purchase-report');
+  if(!page||page.innerHTML.trim()) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('factory-menu')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-chart-line" style="color:var(--green);"></i> 進貨明細</div>
+    </div>
+    <div class="form-card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="cust-field"><label>廠商</label>
+          <select id="pr-supplier" onchange="renderPurchaseReport()">
+            <option value="">全部廠商</option>
+            ${SUPPLIERS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}
+          </select></div>
+        <div class="cust-field"><label>品項</label>
+          <input type="search" id="pr-item" placeholder="品名..." oninput="renderPurchaseReport()" /></div>
+        <div class="cust-field"><label>開始日期</label>
+          <input type="date" id="pr-date-from" onchange="renderPurchaseReport()" /></div>
+        <div class="cust-field"><label>結束日期</label>
+          <input type="date" id="pr-date-to" onchange="renderPurchaseReport()" /></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;" id="pr-stats"></div>
+    <div id="pr-list"></div>`;
   renderPurchaseReport();
 }
 
-// ── 銷貨明細渲染 ──
-function renderSaleReport(){
-  const custFilter = document.getElementById('sale-filter-customer').value;
-  const itemFilter = document.getElementById('sale-filter-item').value.trim().toLowerCase();
-  const dateFrom   = document.getElementById('sale-date-from').value;
-  const dateTo     = document.getElementById('sale-date-to').value;
+// ════════════════════════════════
+// 財務總覽
+// ════════════════════════════════
+let _financeYear = new Date().getFullYear();
+let _financeMonth= new Date().getMonth();
 
-  // 篩選：op 為 ship / POS出售 的記錄
-  let rows = logs.filter(l =>
-    l.op === 'ship' || l.op_label === 'POS出售' || l.op_label === '出貨'
-  );
-
-  // 客戶篩選（估價單轉出貨時會帶 customerId）
-  if(custFilter){
-    rows = rows.filter(l => l.customerId === custFilter);
-  }
-
-  // 品項篩選
-  if(itemFilter){
-    rows = rows.filter(l =>
-      (l.name||'').toLowerCase().includes(itemFilter) ||
-      (l.id||'').toLowerCase().includes(itemFilter)
-    );
-  }
-
-  // 日期篩選
-  rows = filterByDate(rows, dateFrom, dateTo);
-
-  // 統計
-  const totalQty   = rows.reduce((s,l) => s + (l.qty||0), 0);
-  const totalItems = rows.length;
-  renderReportStats('sale-stats', totalItems, totalQty, null, '#BA7517');
-
-  // 渲染列表
-  renderReportList('sale-report-list', rows, 'sale');
+function initFinancePage(){
+  const page = document.getElementById('page-finance');
+  if(!page||page.innerHTML.trim()) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-chart-pie" style="color:var(--purple);"></i> 財務總覽</div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:16px;
+      padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;">
+      <button onclick="changeFinanceMonth(-1)"
+        style="width:36px;height:36px;border-radius:50%;background:var(--bg);border:1px solid var(--border);
+        display:flex;align-items:center;justify-content:center;">
+        <i class="ti ti-chevron-left" style="font-size:18px;"></i>
+      </button>
+      <span id="finance-month-label" style="font-size:18px;font-weight:700;min-width:130px;text-align:center;"></span>
+      <button onclick="changeFinanceMonth(1)"
+        style="width:36px;height:36px;border-radius:50%;background:var(--bg);border:1px solid var(--border);
+        display:flex;align-items:center;justify-content:center;">
+        <i class="ti ti-chevron-right" style="font-size:18px;"></i>
+      </button>
+    </div>
+    <div id="finance-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;"></div>
+    <div class="section-title"><i class="ti ti-trending-up"></i> 每日趨勢</div>
+    <div id="finance-chart" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow-x:auto;margin-bottom:12px;"></div>
+    <div class="section-title"><i class="ti ti-trophy"></i> 暢銷品項 TOP 10</div>
+    <div id="finance-ranking"></div>`;
+  renderFinance();
 }
 
-// ── 進貨明細渲染 ──
-function renderPurchaseReport(){
-  const supFilter  = document.getElementById('purchase-filter-supplier').value;
-  const itemFilter = document.getElementById('purchase-filter-item').value.trim().toLowerCase();
-  const dateFrom   = document.getElementById('purchase-date-from').value;
-  const dateTo     = document.getElementById('purchase-date-to').value;
-
-  // 篩選：op 為 add / 進貨 的記錄
-  let rows = logs.filter(l =>
-    l.op === 'add' || l.op_label === '進貨' || l.op_label === '加入庫存'
-  );
-
-  // 廠商篩選
-  if(supFilter){
-    rows = rows.filter(l => l.supplierId === supFilter);
-  }
-
-  // 品項篩選
-  if(itemFilter){
-    rows = rows.filter(l =>
-      (l.name||'').toLowerCase().includes(itemFilter) ||
-      (l.id||'').toLowerCase().includes(itemFilter)
-    );
-  }
-
-  // 日期篩選
-  rows = filterByDate(rows, dateFrom, dateTo);
-
-  // 統計
-  const totalQty   = rows.reduce((s,l) => s + (l.qty||0), 0);
-  const totalItems = rows.length;
-  renderReportStats('purchase-stats', totalItems, totalQty, null, '#1D9E75');
-
-  // 渲染列表
-  renderReportList('purchase-report-list', rows, 'purchase');
+function changeFinanceMonth(delta){
+  _financeMonth += delta;
+  if(_financeMonth > 11){ _financeMonth=0; _financeYear++; }
+  if(_financeMonth < 0) { _financeMonth=11; _financeYear--; }
+  renderFinance();
 }
 
-// ── 工具：日期篩選 ──
-function filterByDate(rows, from, to){
-  if(!from && !to) return rows;
+function renderFinance(){
+  const monthNames=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const labelEl = document.getElementById('finance-month-label');
+  if(labelEl) labelEl.textContent = `${_financeYear} 年 ${monthNames[_financeMonth]}`;
+
+  // 篩選當月銷售記錄
+  const saleLogs = logs.filter(l => {
+    if(l.op!=='pos_sale'&&l.op!=='order_ship') return false;
+    const date = getLogDate(l);
+    if(!date) return false;
+    return date.getFullYear()===_financeYear && date.getMonth()===_financeMonth;
+  });
+
+  const totalAmt = saleLogs.reduce((s,l)=>s+(l.amount||0),0);
+  const totalQty = saleLogs.reduce((s,l)=>s+(l.qty||0),0);
+  const txCount  = new Set(saleLogs.map(l=>l.refId||l.time)).size;
+
+  const statsEl = document.getElementById('finance-stats');
+  if(statsEl) statsEl.innerHTML = `
+    <div class="form-card" style="text-align:center;">
+      <div style="font-size:24px;font-weight:700;color:var(--purple);">${fmtMoney(totalAmt)}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px;">銷售總額</div>
+    </div>
+    <div class="form-card" style="text-align:center;">
+      <div style="font-size:24px;font-weight:700;">${txCount}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px;">交易筆數</div>
+    </div>
+    <div class="form-card" style="text-align:center;">
+      <div style="font-size:24px;font-weight:700;color:var(--green);">${totalQty}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px;">銷售數量</div>
+    </div>`;
+
+  // 每日趨勢
+  const daysInMonth = new Date(_financeYear, _financeMonth+1, 0).getDate();
+  const daily = Array(daysInMonth).fill(0);
+  saleLogs.forEach(l => {
+    const d = getLogDate(l);
+    if(d) daily[d.getDate()-1] += (l.amount||0);
+  });
+  const maxDay = Math.max(...daily, 1);
+  const chartEl = document.getElementById('finance-chart');
+  if(chartEl) chartEl.innerHTML = `
+    <div style="display:flex;align-items:flex-end;gap:3px;height:80px;min-width:300px;">
+      ${daily.map((v,i)=>`
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
+          <div style="width:100%;border-radius:3px 3px 0 0;min-height:4px;
+            height:${Math.round(v/maxDay*72)+4}px;
+            background:${v>0?'var(--purple)':'var(--border)'};"
+            title="${i+1}日 ${fmtMoney(v)}"></div>
+          <span style="font-size:9px;color:var(--text3);">${(i+1)%5===0?i+1:''}</span>
+        </div>`).join('')}
+    </div>`;
+
+  // 品項排行
+  const itemMap = {};
+  saleLogs.forEach(l => {
+    if(!itemMap[l.productId]) itemMap[l.productId]={id:l.productId,name:l.productName,qty:0,amount:0};
+    itemMap[l.productId].qty    += l.qty||0;
+    itemMap[l.productId].amount += l.amount||0;
+  });
+  const ranking = Object.values(itemMap).sort((a,b)=>b.amount-a.amount).slice(0,10);
+  const maxAmt  = ranking[0]?.amount||1;
+  const rankEl  = document.getElementById('finance-ranking');
+  if(rankEl) rankEl.innerHTML = ranking.length
+    ? ranking.map((item,i)=>{
+        const prod = getItem(item.id)||{emoji:'📦'};
+        return `<div class="inv-warn-row" style="cursor:default;gap:10px;">
+          <span style="font-size:${i<3?22:16}px;">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</span>
+          <div style="flex:1;">
+            <div style="font-size:14px;font-weight:600;">${prod.emoji} ${item.name}</div>
+            <div style="height:6px;background:var(--border);border-radius:3px;margin-top:4px;overflow:hidden;">
+              <div style="height:100%;background:var(--purple);border-radius:3px;
+                width:${Math.round(item.amount/maxAmt*100)}%;"></div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:15px;font-weight:700;color:var(--purple);">${fmtMoney(item.amount)}</div>
+            <div style="font-size:11px;color:var(--text3);">${item.qty} 個</div>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="order-empty">本月尚無銷售記錄</div>';
+}
+
+function getLogDate(l){
+  if(!l.time) return null;
+  try {
+    const parts = l.time.match(/(\d+)\/(\d+)/);
+    if(!parts) return null;
+    const m = parseInt(parts[1])-1;
+    const d = parseInt(parts[2]);
+    const y = m > new Date().getMonth() ? new Date().getFullYear()-1 : new Date().getFullYear();
+    return new Date(y, m, d);
+  } catch(e){ return null; }
+}
+
+// ════════════════════════════════
+// 未收款
+// ════════════════════════════════
+function initUnpaidPage(){
+  const page = document.getElementById('page-unpaid');
+  if(!page||page.innerHTML.trim()) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-receipt-off" style="color:var(--red);"></i> 未收款訂單</div>
+    </div>
+    <div id="unpaid-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;"></div>
+    <div id="unpaid-list"></div>`;
+  renderUnpaid();
+}
+
+function renderUnpaid(){
+  const unpaid  = orders.filter(o=>o.payStatus==='unpaid'  &&o.status!=='archived');
+  const partial = orders.filter(o=>o.payStatus==='partial' &&o.status!=='archived');
+  const owed    = unpaid.reduce((s,o)=>s+(o.totalAmount||0),0)
+                + partial.reduce((s,o)=>s+(o.totalAmount||0)-(o.paidAmount||0),0);
+
+  const statsEl = document.getElementById('unpaid-stats');
+  if(statsEl) statsEl.innerHTML = `
+    <div class="form-card" style="text-align:center;">
+      <div style="font-size:22px;font-weight:700;color:var(--red);">${unpaid.length}</div>
+      <div style="font-size:12px;color:var(--text2);">未收款</div>
+    </div>
+    <div class="form-card" style="text-align:center;">
+      <div style="font-size:22px;font-weight:700;color:var(--amber);">${partial.length}</div>
+      <div style="font-size:12px;color:var(--text2);">部分收款</div>
+    </div>
+    <div class="form-card" style="text-align:center;">
+      <div style="font-size:22px;font-weight:700;color:var(--red);">${fmtMoney(owed)}</div>
+      <div style="font-size:12px;color:var(--text2);">應收總金額</div>
+    </div>`;
+
+  const list   = [...unpaid,...partial].sort((a,b)=>a.createdAt<b.createdAt?1:-1);
+  const listEl = document.getElementById('unpaid-list');
+  if(!listEl) return;
+  listEl.innerHTML = list.length
+    ? list.map(o => {
+        const cust = getCustomer(o.customerId);
+        const owe  = o.payStatus==='partial'?(o.totalAmount||0)-(o.paidAmount||0):(o.totalAmount||0);
+        return `<div class="list-card" onclick="showOrderDetail('${o.id}')">
+          <div class="list-card-top">
+            <span class="list-card-no">${o.no}</span>
+            ${payStatusBadge(o.payStatus)}
+          </div>
+          <div class="list-card-meta">
+            ${cust?`<span><i class="ti ti-user"></i>${cust.name}</span>`:''}
+            <span><i class="ti ti-calendar"></i>${fmtDate(o.createdAt)}</span>
+          </div>
+          <div class="list-card-footer">
+            <span style="color:var(--red);font-size:16px;font-weight:700;">應收 ${fmtMoney(owe)}</span>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="order-empty" style="background:var(--green-light);color:var(--green-dark);">🎉 沒有未收款訂單</div>';
+}
+
+// ── 工具 ──
+function filterLogsByDate(rows, from, to){
+  if(!from&&!to) return rows;
   return rows.filter(l => {
-    if(!l.time) return true;
-    // time 格式：M/D HH:MM，需要加年份比較
-    const year = new Date().getFullYear();
-    // 嘗試解析
-    try {
-      const parts = l.time.match(/(\d+)\/(\d+)/);
-      if(!parts) return true;
-      const m = parts[1].padStart(2,'0');
-      const d = parts[2].padStart(2,'0');
-      const dateStr = `${year}-${m}-${d}`;
-      if(from && dateStr < from) return false;
-      if(to   && dateStr > to)   return false;
-    } catch(e){ return true; }
+    const d = getLogDate(l); if(!d) return true;
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if(from && ds < from) return false;
+    if(to   && ds > to)   return false;
     return true;
   });
 }
-
-// ── 統計列 ──
-function renderReportStats(elId, totalItems, totalQty, totalAmt, color){
-  const el = document.getElementById(elId);
-  el.innerHTML = `
-    <div class="report-stat-item">
-      <div class="report-stat-num" style="color:${color}">${totalItems}</div>
-      <div class="report-stat-label">筆記錄</div>
-    </div>
-    <div class="report-stat-item">
-      <div class="report-stat-num" style="color:${color}">${totalQty}</div>
-      <div class="report-stat-label">總數量</div>
-    </div>
-    ${totalAmt!==null ? `
-    <div class="report-stat-item">
-      <div class="report-stat-num" style="color:${color}">$${totalAmt}</div>
-      <div class="report-stat-label">總金額</div>
-    </div>` : ''}`;
-}
-
-// ── 記錄列表 ──
-function renderReportList(elId, rows, type){
-  const el = document.getElementById(elId);
-  if(!rows.length){
-    el.innerHTML = '<div class="report-empty">沒有符合條件的記錄</div>';
-    return;
-  }
-
-  // 最新的在最上面
-  const sorted = rows.slice().reverse();
-
-  el.innerHTML = sorted.map(l => {
-    const isOut = type === 'sale';
-    const iconCls = isOut ? 'ti-truck' : 'ti-truck-loading';
-    const dotColor = isOut ? '#BA7517' : '#1D9E75';
-
-    // 附加資訊：客戶或廠商
-    let extra = '';
-    if(type === 'sale' && l.customerId && typeof customers !== 'undefined'){
-      const c = customers.find(x=>x.id===l.customerId);
-      if(c) extra = `<span class="report-tag customer-tag"><i class="ti ti-user"></i>${c.name}</span>`;
-    }
-    if(type === 'purchase' && l.supplierId){
-      const s = SUPPLIERS.find(x=>x.id===l.supplierId);
-      if(s) extra = `<span class="report-tag supplier-tag"><i class="ti ti-building-store"></i>${s.name}</span>`;
-    }
-
-    return `
-      <div class="report-row">
-        <div class="report-dot" style="background:${dotColor}"></div>
-        <div class="report-row-info">
-          <div class="report-row-name">${l.emoji||''} ${l.name||'—'}</div>
-          <div class="report-row-meta">
-            <span class="report-id">${l.id||''}</span>
-            ${extra}
-            <span class="report-time"><i class="ti ti-clock"></i>${l.time||'—'}</span>
-          </div>
-        </div>
-        <div class="report-row-right">
-          <div class="report-row-qty" style="color:${dotColor}">
-            ${isOut ? '-' : '+'}${l.qty||0}
-          </div>
-          <div class="report-row-unit">個</div>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-// ── 清除篩選 ──
 function clearReportFilter(type){
-  if(type === 'sale'){
-    document.getElementById('sale-filter-customer').value = '';
-    document.getElementById('sale-filter-item').value     = '';
-    document.getElementById('sale-date-from').value       = '';
-    document.getElementById('sale-date-to').value         = '';
-    renderSaleReport();
-  } else {
-    document.getElementById('purchase-filter-supplier').value = '';
-    document.getElementById('purchase-filter-item').value     = '';
-    document.getElementById('purchase-date-from').value       = '';
-    document.getElementById('purchase-date-to').value         = '';
-    renderPurchaseReport();
-  }
+  const ids = type==='sale'
+    ? ['sr-customer','sr-item','sr-date-from','sr-date-to']
+    : ['pr-supplier','pr-item','pr-date-from','pr-date-to'];
+  ids.forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  if(type==='sale')   renderSaleReport();
+  else                renderPurchaseReport();
 }
-
-// ── 匯出 CSV ──
-function exportReport(type){
-  const rows = type === 'sale'
-    ? logs.filter(l => l.op==='ship' || l.op_label==='POS出售' || l.op_label==='出貨')
-    : logs.filter(l => l.op==='add'  || l.op_label==='進貨'    || l.op_label==='加入庫存');
-
-  if(!rows.length){ showToast('⚠️ 沒有記錄可匯出'); return; }
-
-  const header = type === 'sale'
-    ? '時間,品項編號,品項名稱,數量,客戶\n'
-    : '時間,品項編號,品項名稱,數量,廠商\n';
-
-  const body = rows.map(l => {
-    let extra = '';
-    if(type === 'sale' && l.customerId && typeof customers !== 'undefined'){
-      const c = customers.find(x=>x.id===l.customerId);
-      extra = c ? c.name : '';
-    }
-    if(type === 'purchase' && l.supplierId){
-      const s = SUPPLIERS.find(x=>x.id===l.supplierId);
-      extra = s ? s.name : '';
-    }
-    return `${l.time||''},${l.id||''},${l.name||''},${l.qty||0},${extra}`;
-  }).join('\n');
-
-  const blob = new Blob(['\uFEFF' + header + body], {type:'text/csv;charset=utf-8;'});
+function exportSaleReport(){
+  const rows = logs.filter(l=>l.op==='pos_sale'||l.op==='order_ship');
+  if(!rows.length){ showToast('沒有記錄可匯出'); return; }
+  const csv  = '時間,品項,數量,金額,客戶\n'
+    + rows.map(l => `${l.time||''},${l.productName||''},${l.qty||0},${l.amount||0},${getCustomer(l.customerId)?.name||''}`).join('\n');
+  const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  const fname = type === 'sale' ? '銷貨明細' : '進貨明細';
-  a.href = url;
-  a.download = `${fname}_${new Date().toLocaleDateString('zh-TW')}.csv`;
-  a.click();
+  a.href=url; a.download=`銷貨明細_${todayStr()}.csv`; a.click();
   URL.revokeObjectURL(url);
-  showToast('✅ CSV 已下載！');
+  showToast('✅ CSV 已下載');
 }
 
-// ── 升級記錄頁（加入操作標籤篩選）──
-let historyFilter = 'all';
-function setHistoryFilter(f){
-  historyFilter = f;
-  ['hf-all','hf-purchase','hf-sale','hf-prod'].forEach(id=>{
-    document.getElementById(id)?.classList.remove('active');
-  });
-  document.getElementById('hf-'+f)?.classList.add('active');
-  renderLogsFiltered();
-}
-function renderLogsFiltered(){
-  const c = document.getElementById('log-list');
-  if(!c) return;
-  let items = logs.slice().reverse();
-  if(historyFilter === 'purchase') items = items.filter(l => l.op==='add' || l.op_label==='進貨');
-  if(historyFilter === 'sale')     items = items.filter(l => l.op==='ship'|| l.op_label==='POS出售'|| l.op_label==='出貨');
-  if(historyFilter === 'prod')     items = items.filter(l => l.op==='prod');
-  if(!items.length){
-    c.innerHTML='<div class="order-empty" style="padding:20px;text-align:center;color:var(--text3);">沒有符合的記錄</div>';
-    return;
-  }
-  const iconMap  = {add:'ti-plus',take:'ti-minus',prod:'ti-player-play',ship:'ti-truck'};
-  const clsMap   = {add:'in',take:'out',prod:'prod',ship:'out'};
-  c.innerHTML = items.slice(0,100).map(l=>`
-    <div class="log-row">
-      <div class="log-icon ${clsMap[l.op]||'in'}"><i class="ti ${iconMap[l.op]||'ti-edit'}"></i></div>
-      <div class="log-text">
-        <div class="log-name">${l.emoji||''} ${l.name}</div>
-        <div class="log-time">${l.op_label} ・ ${l.time}</div>
-      </div>
-      <div class="log-qty ${l.op==='add'||l.op==='prod'?'pos':'neg'}">${l.op==='add'||l.op==='prod'?'+':'-'}${l.qty}</div>
-    </div>`).join('');
-}
+// 初始化（每次進入頁面時）
+document.addEventListener('DOMContentLoaded', ()=>{});
