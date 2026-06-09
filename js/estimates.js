@@ -108,15 +108,15 @@ function openEstimateDetail(id){
   const e = getEstimate(id);
   if(!e) return;
 
-  if(e.status === 'converted' || e.status === 'cancelled'){
-    // 唯讀：顯示詳細頁
+  if(e.status === 'pending' || e.status === 'converted' || e.status === 'cancelled'){
+    // 待確認/已轉單/已取消：唯讀預覽頁（待確認可以轉單）
     _currentEst = JSON.parse(JSON.stringify(e));
     renderEstDetailPage();
     showPage('estimate-detail');
     return;
   }
 
-  // 草稿 / 待確認：開編輯頁
+  // 草稿：開編輯頁
   _currentEst      = JSON.parse(JSON.stringify(e));
   _estDelivery     = e.delivery || 'pickup';
   _estDiscountType = e.discount?.type || 'none';

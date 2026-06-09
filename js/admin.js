@@ -1,480 +1,522 @@
-// ===== 後台管理系統 =====
+// ============================================================
+// admin.js — 後台管理：商品、BOM、廠商、地點、Excel匯入
+// ============================================================
 
-// ── 廠商（補充資料存 localStorage） ──
-function getSupExtra(id){ return JSON.parse(localStorage.getItem('erp_sup_'+id)||'{}'); }
-function saveSupExtra(id,data){ localStorage.setItem('erp_sup_'+id, JSON.stringify(data)); }
+// ════════════════════════════════
+// 商品管理
+// ════════════════════════════════
+function initAdminProductsPage(){
+  const page = document.getElementById('page-admin-products');
+  if(!page) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-package" style="color:var(--purple);"></i> 商品管理</div>
+    </div>
+    <div class="search-bar">
+      <i class="ti ti-search"></i>
+      <input type="search" id="ap-search" placeholder="搜尋商品名稱或編號..."
+        oninput="renderAdminProducts(this.value)" />
+    </div>
+    <div class="filter-tabs" style="margin-bottom:8px;">
+      <button class="ftab active" onclick="filterAdminProducts('all',this)">全部</button>
+      ${Object.entries(CATEGORIES).map(([k,v])=>
+        `<button class="ftab" onclick="filterAdminProducts('${k}',this)">${v.emoji} ${v.name}</button>`
+      ).join('')}
+    </div>
+    <div id="ap-list"></div>`;
+  renderAdminProducts('');
+}
 
-// ── 廠商列表 ──
-function renderAdminSuppliers(q){
-  const el = document.getElementById('admin-supplier-list');
-  const items = q ? SUPPLIERS.filter(s=>s.name.includes(q)||s.id.includes(q)) : SUPPLIERS;
-  el.innerHTML = items.map(s=>{
-    const ex = getSupExtra(s.id);
-    const tel = ex.tel || s.tel || '';
-    return `<div class="catdetail-row" onclick="editSupplier('${s.id}')">
-      <div style="font-size:26px;flex-shrink:0;">🏭</div>
-      <div class="catdetail-info">
-        <div class="catdetail-name">${s.name}</div>
-        <div class="catdetail-id">${s.id}${tel?' ・ '+tel:''}</div>
+let _apFilter = 'all';
+function filterAdminProducts(cat, btn){
+  _apFilter = cat;
+  document.querySelectorAll('#page-admin-products .ftab')
+    .forEach(b => b.classList.toggle('active', b === btn));
+  renderAdminProducts(document.getElementById('ap-search')?.value || '');
+}
+
+function renderAdminProducts(q = ''){
+  const el = document.getElementById('ap-list');
+  if(!el) return;
+  let list = ALL_ITEMS;
+  if(_apFilter !== 'all') list = list.filter(i => i.category === _apFilter);
+  if(q) list = list.filter(i => i.name.includes(q) || i.id.includes(q));
+  el.innerHTML = list.map(item => `
+    <div class="admin-item" style="gap:10px;" onclick="openProductEditor('${item.id}')">
+      <span style="font-size:28px;">${item.emoji}</span>
+      <div style="flex:1;min-width:0;">
+        <div class="admin-item-name">${item.name}</div>
+        <div class="admin-item-sub">${item.id} ・ 售價 $${item.salePrice||0} ・ 庫存 ${getTotalStock(item.id)}</div>
       </div>
-      <i class="ti ti-chevron-right" style="color:var(--text3);"></i>
-    </div>`;
-  }).join('') || '<div class="order-empty">找不到廠商</div>';
+      <span class="status-badge ${item.active===false?'badge-cancelled':'badge-done'}" style="font-size:11px;">
+        ${item.active===false?'停用':'啟用'}
+      </span>
+    </div>`).join('') || '<div class="order-empty">沒有符合的商品</div>';
 }
 
-// 新增廠商 Modal（先用 openNewSupplierForm 占位）
-let _editSupId = null;
-function openNewSupplierForm(){ _editSupId=null; openSupEditModal({id:'',name:'',contact:'',tel:'',email:'',fax:'',bank:'',account:'',note:''}); }
-function editSupplier(id){
-  _editSupId = id;
-  const s = SUPPLIERS.find(x=>x.id===id)||{};
-  const ex = getSupExtra(id);
-  openSupEditModal({...s,...ex});
-}
-function openSupEditModal(data){
-  const fields = ['sup-id','sup-name','sup-contact','sup-tel','sup-email','sup-fax','sup-bank','sup-account','sup-note'];
-  const keys   = ['id','name','contact','tel','email','fax','bank','account','note'];
-  fields.forEach((f,i)=>{ const el=document.getElementById(f); if(el) el.value=data[keys[i]]||''; });
-  if(document.getElementById('sup-id')) document.getElementById('sup-id').readOnly = !!_editSupId;
-  document.getElementById('supEditModal').style.display = 'flex';
-}
-function closeSupEditModal(e){ if(!e||e.target===document.getElementById('supEditModal')) document.getElementById('supEditModal').style.display='none'; }
-function saveSupplier(){
-  const id      = document.getElementById('sup-id').value.trim();
-  const name    = document.getElementById('sup-name').value.trim();
-  if(!name){ showToast('⚠️ 請填寫廠商名稱'); return; }
-  const extra = {
-    contact: document.getElementById('sup-contact').value.trim(),
-    tel:     document.getElementById('sup-tel').value.trim(),
-    email:   document.getElementById('sup-email').value.trim(),
-    fax:     document.getElementById('sup-fax').value.trim(),
-    bank:    document.getElementById('sup-bank').value.trim(),
-    account: document.getElementById('sup-account').value.trim(),
-    note:    document.getElementById('sup-note').value.trim(),
-  };
-  if(_editSupId){
-    saveSupExtra(_editSupId, extra);
-    // 更新 SUPPLIERS 陣列的 name（若有變動）
-    const idx = SUPPLIERS.findIndex(s=>s.id===_editSupId);
-    if(idx>=0) SUPPLIERS[idx].name = name;
-  } else {
-    if(!id){ showToast('⚠️ 請填寫廠商編號'); return; }
-    if(SUPPLIERS.find(s=>s.id===id)){ showToast('⚠️ 此編號已存在'); return; }
-    SUPPLIERS.push({id, name, ...Object.fromEntries(Object.entries(extra).map(([k,v])=>[k,'']))});
-    saveSupExtra(id, extra);
-  }
-  document.getElementById('supEditModal').style.display='none';
-  showToast('✅ 廠商資料已儲存');
-  renderAdminSuppliers('');
-}
-
-// ── 商品管理 ──
-let adminProductType = 'finished';
-function filterAdminProducts(type){
-  adminProductType = type;
-  ['finished','semi','pack'].forEach(t=>document.getElementById('pf-'+t)?.classList.toggle('active',t===type));
-  renderAdminProducts();
-}
-function renderAdminProducts(){
-  const q  = (document.getElementById('admin-product-search')?.value||'').toLowerCase();
-  const el = document.getElementById('admin-product-list');
-  let items = adminProductType==='finished' ? FINISHED : MATERIALS.filter(m=>m.type===adminProductType);
-  if(q) items = items.filter(i=>i.name.toLowerCase().includes(q)||i.id.toLowerCase().includes(q));
-  el.innerHTML = items.map(item=>{
-    const qty = inventory[item.id]??item.qty;
-    const cls = qty<=0?'empty':qty<=item.min&&item.min>0?'low':'ok';
-    return `<div class="catdetail-row" onclick="editProduct('${item.id}')">
-      <div class="catdetail-emoji">${item.emoji}</div>
-      <div class="catdetail-info">
-        <div class="catdetail-name">${item.name}</div>
-        <div class="catdetail-id">${item.id} ・ 安全庫存 ${item.min}</div>
-      </div>
-      <div class="catdetail-right">
-        <div class="catdetail-qty ${cls}">${qty}</div>
-        <div class="catdetail-unit">個</div>
-      </div>
-    </div>`;
-  }).join('') || '<div class="order-empty">找不到商品</div>';
-}
-
-let _editProductId = null;
-function editProduct(id){
-  _editProductId = id;
-  const item = ALL_ITEMS.find(i=>i.id===id);
+function openProductEditor(id){
+  const item = getItem(id);
   if(!item) return;
-  document.getElementById('prod-edit-id').value       = item.id;
-  document.getElementById('prod-edit-name').value     = item.name;
-  document.getElementById('prod-edit-emoji').value    = item.emoji;
-  document.getElementById('prod-edit-min').value      = item.min||0;
-  document.getElementById('prod-edit-price').value    = item.price||0;
-  document.getElementById('prod-edit-qty').value      = inventory[item.id]??item.qty;
-  document.getElementById('productEditModal').style.display = 'flex';
+  const modal = document.getElementById('productEditorModal');
+  document.getElementById('pe-title').textContent   = item.name;
+  document.getElementById('pe-sale-price').value    = item.salePrice || 0;
+  document.getElementById('pe-cost-price').value    = item.costPrice || 0;
+  document.getElementById('pe-safety-stock').value  = item.safetyStock || 0;
+  document.getElementById('pe-item-id').value       = id;
+  modal.style.display = 'flex';
 }
-function openNewProductForm(){
-  _editProductId = null;
-  ['prod-edit-id','prod-edit-name','prod-edit-emoji','prod-edit-min','prod-edit-price','prod-edit-qty']
-    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('prod-edit-emoji').value='📦';
-  document.getElementById('productEditModal').style.display='flex';
+function saveProductEdit(){
+  const id   = document.getElementById('pe-item-id').value;
+  const item = ITEM_INDEX[id];
+  if(!item) return;
+  item.salePrice   = parseInt(document.getElementById('pe-sale-price').value)   || 0;
+  item.costPrice   = parseInt(document.getElementById('pe-cost-price').value)   || 0;
+  item.safetyStock = parseInt(document.getElementById('pe-safety-stock').value) || 0;
+  // 同步 Firebase
+  if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', buildProductOverrides());
+  document.getElementById('productEditorModal').style.display = 'none';
+  showToast('✅ 商品已更新');
+  renderAdminProducts(document.getElementById('ap-search')?.value || '');
 }
-function closeProductEditModal(e){ if(!e||e.target===document.getElementById('productEditModal')) document.getElementById('productEditModal').style.display='none'; }
-function saveProduct(){
-  const id    = document.getElementById('prod-edit-id').value.trim();
-  const name  = document.getElementById('prod-edit-name').value.trim();
-  const emoji = document.getElementById('prod-edit-emoji').value.trim()||'📦';
-  const min   = parseInt(document.getElementById('prod-edit-min').value)||0;
-  const price = parseInt(document.getElementById('prod-edit-price').value)||0;
-  const qty   = parseInt(document.getElementById('prod-edit-qty').value)||0;
-  if(!id||!name){ showToast('⚠️ 請填寫編號和名稱'); return; }
-  if(_editProductId){
-    const arr = adminProductType==='finished'?FINISHED:MATERIALS;
-    const idx = arr.findIndex(i=>i.id===_editProductId);
-    if(idx>=0){ arr[idx].name=name; arr[idx].emoji=emoji; arr[idx].min=min; arr[idx].price=price; }
-    // 更新 ALL_ITEMS
-    const ai = ALL_ITEMS.findIndex(i=>i.id===_editProductId);
-    if(ai>=0){ ALL_ITEMS[ai].name=name; ALL_ITEMS[ai].emoji=emoji; ALL_ITEMS[ai].min=min; ALL_ITEMS[ai].price=price; }
-    // 更新 BARCODE_INDEX
-    if(BARCODE_INDEX[id]) { BARCODE_INDEX[id].name=name; BARCODE_INDEX[id].emoji=emoji; }
-    inventory[_editProductId] = qty;
-  } else {
-    const newItem = {id, barcode:id, name, emoji, qty, min, price, type:adminProductType==='finished'?undefined:adminProductType, cat:adminProductType==='finished'?'其他':undefined};
-    if(adminProductType==='finished') FINISHED.push(newItem);
-    else { newItem.type=adminProductType; MATERIALS.push(newItem); }
-    ALL_ITEMS.push(newItem);
-    BARCODE_INDEX[id] = newItem;
-    inventory[id] = qty;
-  }
-  saveInventory();
-  document.getElementById('productEditModal').style.display='none';
-  showToast('✅ 商品資料已儲存');
-  renderAdminProducts();
+function buildProductOverrides(){
+  const obj = {};
+  ALL_ITEMS.forEach(i => {
+    obj[i.id] = { salePrice:i.salePrice, costPrice:i.costPrice, safetyStock:i.safetyStock, active:i.active };
+  });
+  return obj;
+}
+function toggleProductActive(id){
+  const item = ITEM_INDEX[id];
+  if(!item) return;
+  item.active = !item.active;
+  if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', buildProductOverrides());
+  document.getElementById('productEditorModal').style.display = 'none';
+  showToast(item.active ? '✅ 商品已啟用' : '🚫 商品已停用');
+  renderAdminProducts('');
 }
 
-// ── BOM 管理 ──
-let bomEditId = null;
-let bomEditItems = [];
-
-// BOM 額外存在 localStorage，這樣修改後重整不會消失
-function loadBomFromStorage(){
-  const saved = JSON.parse(localStorage.getItem('erp_bom') || '{}');
-  Object.keys(saved).forEach(id => { BOM[id] = saved[id]; });
+// ════════════════════════════════
+// BOM 管理
+// ════════════════════════════════
+function initAdminBomPage(){
+  const page = document.getElementById('page-admin-bom');
+  if(!page) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-git-merge" style="color:var(--purple);"></i> BOM 加工組合</div>
+    </div>
+    <div class="search-bar">
+      <i class="ti ti-search"></i>
+      <input type="search" id="bom-search" placeholder="搜尋成品..."
+        oninput="renderBomList(this.value)" />
+    </div>
+    <div id="bom-list"></div>`;
+  renderBomList('');
 }
-function saveBomToStorage(){
-  localStorage.setItem('erp_bom', JSON.stringify(BOM));
-  // 同步到 Firebase
-  if(typeof _db !== 'undefined' && _db){
-    _db.ref('erp/bom').set(BOM).catch(()=>{});
-  }
-}
 
-function renderBomList(q){
+function renderBomList(q = ''){
   const el = document.getElementById('bom-list');
-  const items = q ? FINISHED.filter(i=>i.name.includes(q)||i.id.includes(q)) : FINISHED;
-  const withBom    = items.filter(i=>(BOM[i.id]||[]).length>0);
-  const withoutBom = items.filter(i=>(BOM[i.id]||[]).length===0);
-  const sorted = [...withBom, ...withoutBom];
-
-  el.innerHTML = `
-    <div style="font-size:12px;color:var(--text2);padding:6px 0;margin-bottom:4px;">
-      已設定 ${withBom.length} 個 ／ 未設定 ${withoutBom.length} 個
-    </div>` +
-  sorted.map(item=>{
-    const bom = BOM[item.id]||[];
-    const hasBom = bom.length > 0;
-    return `<div class="catdetail-row" onclick="editBom('${item.id}')">
-      <div class="catdetail-emoji">${item.emoji}</div>
-      <div class="catdetail-info">
-        <div class="catdetail-name">${item.name}</div>
-        <div class="catdetail-id">${item.id}</div>
+  if(!el) return;
+  let list = ALL_ITEMS.filter(i => i.salePrice > 0); // 只顯示有售價的（成品）
+  if(q) list = list.filter(i => i.name.includes(q) || i.id.includes(q));
+  const withBom    = list.filter(i => (BOM[i.id]||[]).length > 0);
+  const withoutBom = list.filter(i => !(BOM[i.id]||[]).length);
+  el.innerHTML = `<div style="font-size:12px;color:var(--text2);padding:6px 0;margin-bottom:4px;">
+    已設定 ${withBom.length} 個 ／ 未設定 ${withoutBom.length} 個</div>` +
+  [...withBom, ...withoutBom].map(item => {
+    const bom = BOM[item.id] || [];
+    return `<div class="admin-item" onclick="openBomEditor('${item.id}')">
+      <span style="font-size:28px;">${item.emoji}</span>
+      <div style="flex:1;">
+        <div class="admin-item-name">${item.name}</div>
+        <div class="admin-item-sub">${item.id}</div>
       </div>
-      <div style="text-align:right;flex-shrink:0;">
-        ${hasBom
-          ? `<span class="p-tag tag-fin" style="font-size:11px;">✅ ${bom.length} 種材料</span>`
-          : `<span class="p-tag" style="background:var(--bg);color:var(--text3);font-size:11px;">未設定</span>`}
-      </div>
+      ${bom.length
+        ? `<span class="status-badge badge-done" style="font-size:11px;">✅ ${bom.length} 種材料</span>`
+        : `<span class="status-badge badge-draft" style="font-size:11px;">未設定</span>`}
     </div>`;
   }).join('');
 }
 
-function editBom(id){
-  bomEditId = id;
-  const item = FINISHED.find(i=>i.id===id);
-  if(!item) return;
-  document.getElementById('bom-edit-title').textContent = item.name;
-  document.getElementById('bom-edit-hint').textContent  = `${item.emoji} ${item.name} 需要哪些材料？`;
-  bomEditItems = JSON.parse(JSON.stringify(BOM[id]||[]));
-  document.getElementById('bom-mat-search').value='';
-  document.getElementById('bom-mat-result').style.display='none';
-  renderBomEditList();
-  showPage('admin-bom-edit');
+let _bomEditorId    = null;
+let _bomEditorItems = [];
+function openBomEditor(id){
+  _bomEditorId    = id;
+  const item      = getItem(id);
+  _bomEditorItems = JSON.parse(JSON.stringify(BOM[id] || []));
+  document.getElementById('bom-editor-title').textContent = (item?.name || id) + ' 的材料';
+  renderBomEditorList();
+  document.getElementById('bomEditorModal').style.display = 'flex';
 }
-
-function bomSearchMat(q){
-  const res = document.getElementById('bom-mat-result');
-  if(!q){ res.style.display='none'; return; }
-  const items = MATERIALS.filter(i=>i.name.includes(q)||i.id.includes(q)).slice(0,8);
-  if(!items.length){ res.style.display='none'; return; }
-  res.style.display='block';
-  res.innerHTML = items.map(m=>`
-    <div class="pos-search-result-item" onclick="bomAddMat('${m.id}')">
-      <span>${m.emoji}</span>
-      <span style="flex:1;font-size:13px;">${m.name}</span>
-      <span class="p-tag ${m.type==='semi'?'semi':'pack'}">${m.type==='semi'?'半成品':'包材'}</span>
+function renderBomEditorList(){
+  const el = document.getElementById('bom-editor-list');
+  if(!el) return;
+  if(!_bomEditorItems.length){
+    el.innerHTML = '<div class="order-empty">尚未設定材料，請搜尋加入</div>'; return;
+  }
+  el.innerHTML = _bomEditorItems.map((b, idx) => {
+    const m = getItem(b.materialId) || { emoji:'📦', name: b.materialName || b.materialId };
+    return `<div class="order-row">
+      <span style="font-size:24px;">${m.emoji}</span>
+      <div class="order-info">
+        <div class="order-name">${m.name}</div>
+        <div class="order-id">${b.materialId}</div>
+      </div>
+      <input type="number" value="${b.qty}" min="0.1" step="0.1"
+        style="width:64px;padding:6px;font-size:15px;font-weight:700;text-align:center;
+        border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);"
+        onchange="_bomEditorItems[${idx}].qty=parseFloat(this.value)||1" />
+      <button class="order-del" onclick="_bomEditorItems.splice(${idx},1);renderBomEditorList()">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>`;
+  }).join('');
+}
+function bomEditorSearch(q){
+  const res = document.getElementById('bom-editor-search-result');
+  if(!res||!q){ if(res) res.style.display='none'; return; }
+  const pool = ALL_ITEMS.filter(i => !i.salePrice || i.salePrice === 0 || i.id.startsWith('MAT_'));
+  const results = pool.filter(i => i.name?.includes(q) || i.id?.includes(q)).slice(0,8);
+  if(!results.length){ res.style.display='none'; return; }
+  res.style.display = 'block';
+  res.innerHTML = results.map(m => `
+    <div class="ss-item" onmousedown="bomEditorAddMat('${m.id}','${m.name.replace(/'/g,"\\'")}')">
+      <span class="ss-emoji">${m.emoji||'📦'}</span>
+      <div class="ss-info"><div class="ss-name">${m.name}</div><div class="ss-sub">${m.id}</div></div>
     </div>`).join('');
 }
-
-function bomAddMat(id){
-  const m = MATERIALS.find(i=>i.id===id);
-  if(!m) return;
-  if(bomEditItems.find(i=>i.id===id)){ showToast('⚠️ 已在清單中'); return; }
-  bomEditItems.push({id, name:m.name, qty:1});
-  document.getElementById('bom-mat-search').value='';
-  document.getElementById('bom-mat-result').style.display='none';
-  renderBomEditList();
+function bomEditorAddMat(id, name){
+  if(_bomEditorItems.find(i=>i.id===id||i.materialId===id)){showToast('已在清單中');return;}
+  _bomEditorItems.push({ materialId:id, materialName:name, qty:1 });
+  document.getElementById('bom-editor-search').value = '';
+  document.getElementById('bom-editor-search-result').style.display = 'none';
+  renderBomEditorList();
 }
-
-function bomRemoveMat(id){ bomEditItems=bomEditItems.filter(i=>i.id!==id); renderBomEditList(); }
-
-function bomChangeQty(id, delta){
-  const m = bomEditItems.find(i=>i.id===id);
-  if(!m) return;
-  m.qty = Math.max(0.1, parseFloat((m.qty + delta).toFixed(1)));
-  renderBomEditList();
-}
-
-function bomSetQty(id, val){
-  const m = bomEditItems.find(i=>i.id===id);
-  if(!m) return;
-  const n = parseFloat(val);
-  if(!isNaN(n) && n > 0) m.qty = n;
-}
-
-function renderBomEditList(){
-  const el  = document.getElementById('bom-mat-list');
-  const cnt = document.getElementById('bom-mat-count');
-  cnt.textContent = bomEditItems.length + '項';
-  if(!bomEditItems.length){ el.innerHTML='<div class="order-empty">尚未設定材料，請用上方搜尋加入</div>'; return; }
-  el.innerHTML = bomEditItems.map(item=>{
-    const m = MATERIALS.find(i=>i.id===item.id) || {emoji:'📦', name:item.id};
-    const tag = m.type==='semi' ? '半成品' : '包材';
-    const tagCls = m.type==='semi' ? 'semi' : 'pack';
-    return `<div class="order-row">
-      <div class="order-emoji">${m.emoji}</div>
-      <div class="order-info">
-        <div class="order-name">${item.name||m.name}</div>
-        <div class="order-id">
-          ${item.id}
-          <span class="p-tag ${tagCls}" style="font-size:10px;">${tag}</span>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <button class="qty-edit-btn minus" onclick="bomChangeQty('${item.id}',-1)">−</button>
-        <input type="number" value="${item.qty}" min="0.1" step="0.1"
-          style="width:52px;padding:4px 6px;font-size:15px;font-weight:700;border:1px solid var(--border);border-radius:6px;text-align:center;background:var(--surface);color:var(--text);"
-          onchange="bomSetQty('${item.id}',this.value)"
-          title="每生產1個成品需要的數量" />
-        <button class="qty-edit-btn plus" onclick="bomChangeQty('${item.id}',1)">＋</button>
-      </div>
-      <button class="order-del" onclick="bomRemoveMat('${item.id}')"><i class="ti ti-x"></i></button>
-    </div>`;
-  }).join('');
-}
-
-function saveBomEdit(){
-  if(!bomEditId) return;
-  if(!bomEditItems.length){
-    if(!confirm('確定要清空這個成品的 BOM 組合嗎？')) return;
-  }
-  BOM[bomEditId] = JSON.parse(JSON.stringify(bomEditItems));
-  const nameIndex = {};
-  MATERIALS.forEach(m=>{ nameIndex[m.id]=m.name; });
-  BOM_RAW[bomEditId] = bomEditItems.map(i=>({n:nameIndex[i.id]||i.id, q:i.qty}));
-  saveBomToStorage();
+function saveBomEditor(){
+  BOM[_bomEditorId] = JSON.parse(JSON.stringify(_bomEditorItems));
+  localStorage.setItem('erp_bom', JSON.stringify(BOM));
+  if(typeof pushToFirebase === 'function') pushToFirebase('bom', BOM);
+  document.getElementById('bomEditorModal').style.display = 'none';
   showToast('✅ BOM 已儲存');
-  showPage('admin-bom');
-  renderBomList('');
+  renderBomList(document.getElementById('bom-search')?.value || '');
 }
 
-// ══════════════════════════════
-// 估價單付款狀態
-// ══════════════════════════════
-let estPayStatus = 'unpaid';
-const PAY_LABELS = { unpaid:'未收款', partial:'部分收款', paid:'已收款' };
-const PAY_COLORS = { unpaid:'#E24B4A', partial:'#BA7517', paid:'#1D9E75' };
-
-function selectPayStatus(status){
-  estPayStatus = status;
-  ['unpaid','partial','paid'].forEach(s=>{
-    document.getElementById('ps-'+s)?.classList.toggle('active', s===status);
-  });
-  document.getElementById('partial-amount-row').style.display = status==='partial' ? 'flex' : 'none';
-}
-
-// 在 _collectEstimate 後補充付款欄位（由 estimate.js 呼叫）
-function collectPayStatus(){
-  return {
-    payStatus:  estPayStatus,
-    paidAmount: estPayStatus==='paid' ? (parseInt(document.getElementById('est-total')?.textContent?.replace('$',''))||0)
-                : estPayStatus==='partial' ? (parseInt(document.getElementById('est-paid-amount')?.value)||0)
-                : 0,
-  };
-}
-function applyPayStatus(e){
-  estPayStatus = e.payStatus||'unpaid';
-  ['unpaid','partial','paid'].forEach(s=>{
-    document.getElementById('ps-'+s)?.classList.toggle('active',s===estPayStatus);
-  });
-  document.getElementById('partial-amount-row').style.display = estPayStatus==='partial'?'flex':'none';
-  if(document.getElementById('est-paid-amount'))
-    document.getElementById('est-paid-amount').value = e.paidAmount||0;
-}
-
-// ══════════════════════════════
-// 未收款頁面
-// ══════════════════════════════
-function initUnpaid(){
-  const el     = document.getElementById('unpaid-list');
-  const statsEl= document.getElementById('unpaid-stats');
-  const unpaid = (typeof estimates!=='undefined' ? estimates : []).filter(e=>
-    (e.payStatus==='unpaid'||!e.payStatus) && e.status!=='cancel' && e.status!=='draft'
-  );
-  const partial= (typeof estimates!=='undefined' ? estimates : []).filter(e=>e.payStatus==='partial');
-  const totalOwed = unpaid.reduce((s,e)=>s+(e.total||0),0)
-                  + partial.reduce((s,e)=>s+(e.total||0)-(e.paidAmount||0),0);
-  statsEl.innerHTML = `
-    <div class="finance-stat-card"><div class="finance-stat-num" style="color:#E24B4A;">${unpaid.length}</div><div class="finance-stat-label">未收款單</div></div>
-    <div class="finance-stat-card"><div class="finance-stat-num" style="color:#BA7517;">${partial.length}</div><div class="finance-stat-label">部分收款</div></div>
-    <div class="finance-stat-card"><div class="finance-stat-num" style="color:#E24B4A;">$${totalOwed.toLocaleString()}</div><div class="finance-stat-label">應收總金額</div></div>`;
-  const all = [...unpaid.map(e=>({...e,_type:'unpaid'})), ...partial.map(e=>({...e,_type:'partial'}))];
-  all.sort((a,b)=>a.date<b.date?1:-1);
-  if(!all.length){ el.innerHTML='<div class="report-empty">沒有未收款訂單 🎉</div>'; return; }
-  const cusMap = {};
-  if(typeof customers!=='undefined') customers.forEach(c=>{ cusMap[c.id]=c.name; });
-  el.innerHTML = all.map(e=>{
-    const owed = e._type==='partial'?(e.total||0)-(e.paidAmount||0):(e.total||0);
-    const col  = e._type==='partial'?'#BA7517':'#E24B4A';
-    return `<div class="est-list-row" onclick="viewEstimate('${e.id}')">
-      <div class="est-list-left">
-        <div class="est-list-no">${e.no}</div>
-        <div class="est-list-cust">${cusMap[e.customerId]||'—'}</div>
-        <div class="est-list-date">${fmtDate(e.date)}</div>
-      </div>
-      <div class="est-list-right">
-        <div class="est-list-total" style="color:${col};">應收 $${owed.toLocaleString()}</div>
-        <div class="est-list-status" style="color:${col};">${PAY_LABELS[e._type]}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ══════════════════════════════
-// 財務總覽
-// ══════════════════════════════
-let financeMonth = new Date().getMonth();
-let financeYear  = new Date().getFullYear();
-
-function initFinance(){ renderFinance(); }
-function changeMonth(delta){
-  financeMonth += delta;
-  if(financeMonth>11){ financeMonth=0; financeYear++; }
-  if(financeMonth<0) { financeMonth=11; financeYear--; }
-  renderFinance();
-}
-
-function renderFinance(){
-  const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-  document.getElementById('finance-month-label').textContent = `${financeYear} 年 ${monthNames[financeMonth]}`;
-
-  // 篩選當月銷售記錄
-  const monthLogs = logs.filter(l=>{
-    if(l.op!=='ship' && l.op_label!=='POS出售') return false;
-    if(!l.time) return false;
-    try{
-      const parts = l.time.match(/(\d+)\/(\d+)/);
-      if(!parts) return false;
-      const m = parseInt(parts[1])-1;
-      // 假設年份為當前或上一年
-      const y = m > new Date().getMonth() ? financeYear-1 : financeYear;
-      return m===financeMonth && y===financeYear;
-    } catch(e){ return false; }
-  });
-
-  // 計算銷售額（用商品售價）
-  const totalSales = monthLogs.reduce((s,l)=>{
-    const item = ALL_ITEMS.find(i=>i.id===l.id);
-    return s+(item?.price||0)*(l.qty||0);
-  },0);
-  const totalQty   = monthLogs.reduce((s,l)=>s+(l.qty||0),0);
-  const txCount    = [...new Set(monthLogs.map(l=>l.time))].length;
-
-  // 統計卡
-  document.getElementById('finance-stats').innerHTML = `
-    <div class="finance-stat-card">
-      <div class="finance-stat-num" style="color:#6B4FBB;">$${totalSales.toLocaleString()}</div>
-      <div class="finance-stat-label">銷售總額</div>
+// ════════════════════════════════
+// 廠商管理
+// ════════════════════════════════
+function initAdminSuppliersPage(){
+  const page = document.getElementById('page-admin-suppliers');
+  if(!page) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-building-store" style="color:var(--purple);"></i> 廠商管理</div>
     </div>
-    <div class="finance-stat-card">
-      <div class="finance-stat-num">${txCount}</div>
-      <div class="finance-stat-label">交易筆數</div>
+    <div class="search-bar">
+      <i class="ti ti-search"></i>
+      <input type="search" id="sup-search" placeholder="搜尋廠商名稱..."
+        oninput="renderAdminSuppliers(this.value)" />
     </div>
-    <div class="finance-stat-card">
-      <div class="finance-stat-num">${totalQty}</div>
-      <div class="finance-stat-label">銷售數量</div>
-    </div>`;
-
-  // 每日趨勢（最多31天）
-  const daysInMonth = new Date(financeYear, financeMonth+1, 0).getDate();
-  const dailySales  = Array(daysInMonth).fill(0);
-  monthLogs.forEach(l=>{
-    const parts = l.time?.match(/(\d+)\/(\d+)/);
-    if(!parts) return;
-    const d = parseInt(parts[2])-1;
-    if(d>=0&&d<daysInMonth){
-      const item = ALL_ITEMS.find(i=>i.id===l.id);
-      dailySales[d] += (item?.price||0)*(l.qty||0);
-    }
-  });
-  const maxDay = Math.max(...dailySales,1);
-  const chartEl = document.getElementById('finance-daily-chart');
-  chartEl.innerHTML = `
-    <div class="finance-bar-chart">
-      ${dailySales.map((v,i)=>`
-        <div class="finance-bar-col" title="${i+1}日 $${v.toLocaleString()}">
-          <div class="finance-bar" style="height:${Math.round(v/maxDay*80)+4}px;background:${v>0?'#6B4FBB':'var(--border)'}"></div>
-          <div class="finance-bar-label">${(i+1)%5===0?i+1:''}</div>
-        </div>`).join('')}
-    </div>
-    <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:4px;">（每格代表1天，數字為日期）</div>`;
-
-  // 品項排行 TOP 10
-  const itemMap = {};
-  monthLogs.forEach(l=>{
-    if(!itemMap[l.id]) itemMap[l.id]={id:l.id,name:l.name,emoji:l.emoji||'📦',qty:0,amount:0};
-    const item = ALL_ITEMS.find(i=>i.id===l.id);
-    itemMap[l.id].qty    += l.qty||0;
-    itemMap[l.id].amount += (item?.price||0)*(l.qty||0);
-  });
-  const ranking = Object.values(itemMap).sort((a,b)=>b.amount-a.amount).slice(0,10);
-  const maxAmt  = ranking[0]?.amount||1;
-  const rankEl  = document.getElementById('finance-ranking');
-  rankEl.innerHTML = ranking.length ? ranking.map((item,i)=>`
-    <div class="event-rank-row">
-      <div class="event-rank-num ${i<3?'top':''}">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
-      <div style="flex:1;">
-        <div style="font-size:13px;font-weight:600;">${item.emoji} ${item.name}</div>
-        <div class="event-rank-bar-wrap"><div class="event-rank-bar" style="width:${Math.round(item.amount/maxAmt*100)}%;background:#6B4FBB;"></div></div>
-      </div>
-      <div style="text-align:right;flex-shrink:0;">
-        <div style="font-size:15px;font-weight:700;color:#6B4FBB;">$${item.amount.toLocaleString()}</div>
-        <div style="font-size:11px;color:var(--text3);">${item.qty} 個</div>
-      </div>
-    </div>`).join('') : '<div class="report-empty">本月尚無銷售記錄</div>';
-}
-
-// ── 初始化 ──
-document.addEventListener('DOMContentLoaded', ()=>{
-  loadBomFromStorage();  // 先載入儲存的 BOM
-  renderBomList('');
+    <div id="sup-list"></div>`;
   renderAdminSuppliers('');
-  renderAdminProducts();
+}
+
+function renderAdminSuppliers(q = ''){
+  const el = document.getElementById('sup-list');
+  if(!el) return;
+  let list = SUPPLIERS;
+  if(q) list = list.filter(s => s.name.includes(q) || s.id.includes(q));
+  el.innerHTML = list.map(s => `
+    <div class="admin-item" onclick="openSupplierEditor('${s.id}')">
+      <div style="width:40px;height:40px;border-radius:50%;background:var(--purple-light);
+        display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;
+        color:var(--purple);flex-shrink:0;">${s.phonetic||'?'}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="admin-item-name">${s.name}</div>
+        <div class="admin-item-sub">${s.id}${s.tel?' ・ '+s.tel:''}</div>
+      </div>
+      <i class="ti ti-chevron-right" style="color:var(--text3);"></i>
+    </div>`).join('') || '<div class="order-empty">找不到廠商</div>';
+}
+
+function openSupplierEditor(id){
+  const s = SUPPLIERS.find(sup => sup.id === id);
+  if(!s) return;
+  // 合併 Firebase/localStorage 裡的額外聯絡資料
+  const extra = JSON.parse(localStorage.getItem('erp_sup_' + id) || '{}');
+  const merged = { ...s, ...extra };
+  document.getElementById('se-id').textContent   = merged.id;
+  document.getElementById('se-name').textContent = merged.name;
+  const fields = ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo'];
+  fields.forEach(f => {
+    const el = document.getElementById('se-' + f);
+    if(el) el.value = merged[f] || '';
+  });
+  document.getElementById('se-hidden-id').value = id;
+  document.getElementById('supplierEditorModal').style.display = 'flex';
+}
+function saveSupplierEditor(){
+  const id = document.getElementById('se-hidden-id').value;
+  const fields = ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo'];
+  const data = {};
+  fields.forEach(f => { data[f] = document.getElementById('se-'+f)?.value.trim() || ''; });
+  // 存到 localStorage
+  localStorage.setItem('erp_sup_' + id, JSON.stringify(data));
+  // 同步到 Firebase
+  if(typeof _db !== 'undefined' && _db){
+    _db.ref(`erp/supplierDetails/${id}`).set(data).catch(()=>{});
+  }
+  document.getElementById('supplierEditorModal').style.display = 'none';
+  showToast('✅ 廠商資料已儲存');
+  renderAdminSuppliers(document.getElementById('sup-search')?.value || '');
+}
+
+// ════════════════════════════════
+// 地點管理
+// ════════════════════════════════
+function initLocationPage(){
+  const page = document.getElementById('page-admin-locations');
+  if(!page) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-map-2" style="color:var(--purple);"></i> 門市地點設定</div>
+      <button class="small-btn green-btn" onclick="openAddLocationModal()">
+        <i class="ti ti-plus"></i> 新增
+      </button>
+    </div>
+    <div id="location-list"></div>`;
+  renderLocationList();
+}
+
+function renderLocationList(){
+  const el = document.getElementById('location-list');
+  if(!el) return;
+  const typeLabel = { store_main:'主倉儲', store_sub:'子門市', event:'外展' };
+  el.innerHTML = locations.map(loc => `
+    <div class="admin-item">
+      <div style="width:40px;height:40px;border-radius:50%;
+        background:${loc.isMain?'var(--green-light)':'var(--blue-light)'};
+        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="ti ti-building-store" style="font-size:20px;color:${loc.isMain?'var(--green)':'var(--blue)'};"></i>
+      </div>
+      <div style="flex:1;">
+        <div class="admin-item-name">${loc.name}</div>
+        <div class="admin-item-sub">${typeLabel[loc.type]||loc.type} ・ ID: ${loc.id}</div>
+      </div>
+      <span class="status-badge ${loc.active?'badge-done':'badge-cancelled'}" style="font-size:11px;">
+        ${loc.active?'啟用':'停用'}
+      </span>
+    </div>`).join('') || '<div class="order-empty">尚未設定地點</div>';
+}
+
+function openAddLocationModal(){
+  document.getElementById('addLocModal').style.display = 'flex';
+  ['loc-id','loc-name'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('loc-type').value = 'store_sub';
+}
+function saveNewLocation(){
+  const id   = document.getElementById('loc-id')?.value.trim().replace(/\s/g,'_');
+  const name = document.getElementById('loc-name')?.value.trim();
+  const type = document.getElementById('loc-type')?.value;
+  if(!id||!name){ showToast('⚠️ 請填寫地點ID和名稱'); return; }
+  if(locations.find(l=>l.id===id)){ showToast('⚠️ 此ID已存在'); return; }
+  addLocation({ id, name, type, isMain:type==='store_main', active:true });
+  document.getElementById('addLocModal').style.display = 'none';
+  showToast('✅ 地點已新增：' + name);
+  renderLocationList();
+}
+
+// ════════════════════════════════
+// Excel 匯入
+// ════════════════════════════════
+function initImportPage(){
+  const page = document.getElementById('page-admin-import');
+  if(!page) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-table-import" style="color:var(--purple);"></i> Excel 匯入</div>
+    </div>
+    <div class="form-card">
+      <div class="form-section-title">目前資料狀況</div>
+      <div class="amount-row"><span>商品數量</span><strong>${ALL_ITEMS.length} 筆</strong></div>
+      <div class="amount-row"><span>廠商數量</span><strong>${SUPPLIERS.length} 筆</strong></div>
+      <div class="amount-row"><span>BOM 設定</span><strong>${Object.keys(BOM).length} 筆</strong></div>
+      <div class="amount-row"><span>客戶數量</span><strong>${customers.length} 筆</strong></div>
+    </div>
+    <div class="form-card" style="margin-top:10px;">
+      <div class="form-section-title">匯入說明</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.8;">
+        商品、廠商、BOM 的資料已從 Excel 匯入到程式碼（data.js）。<br>
+        如需更新這些資料，請將新的 Excel 上傳給開發者重新匯入。<br><br>
+        目前可以從這裡匯入的資料：
+      </div>
+      <div style="margin-top:12px;">
+        <div class="form-section-title">匯入客戶資料（CSV）</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">
+          格式：客戶名稱,聯絡人,電話,Email,地址
+        </div>
+        <input type="file" id="import-customer-file" accept=".csv"
+          style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:8px;
+          font-size:13px;background:var(--bg);"
+          onchange="previewCustomerImport(this)" />
+        <div id="import-preview" style="margin-top:10px;"></div>
+      </div>
+    </div>`;
+}
+
+function previewCustomerImport(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n').filter(l=>l.trim());
+    const preview = lines.slice(0,5).map(l => l.split(','));
+    const el = document.getElementById('import-preview');
+    el.innerHTML = `<div style="font-size:13px;color:var(--text2);margin-bottom:8px;">
+      預覽（共 ${lines.length} 筆）：</div>` +
+      preview.map(cols=>`<div style="padding:6px;border-bottom:1px solid var(--border);font-size:12px;">
+        ${cols.map(c=>`<span style="margin-right:8px;">${c.trim()}</span>`).join('')}
+      </div>`).join('') +
+      `<button class="confirm-btn" style="margin-top:10px;"
+        onclick="doImportCustomers()">
+        <i class="ti ti-check"></i> 確認匯入 ${lines.length} 筆客戶
+      </button>`;
+    window._importCustomerData = lines;
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function doImportCustomers(){
+  const lines = window._importCustomerData || [];
+  let count = 0;
+  lines.forEach(line => {
+    const cols = line.split(',').map(c => c.trim());
+    if(!cols[0]) return;
+    customers.push({
+      id:      'C' + Date.now() + Math.random().toString(36).slice(2,5),
+      name:    cols[0] || '',
+      contact: cols[1] || '',
+      tel:     cols[2] || '',
+      email:   cols[3] || '',
+      address: cols[4] || '',
+      source:  'phone',
+      createdAt: todayStr(),
+    });
+    count++;
+  });
+  if(typeof saveCustomers === 'function') saveCustomers();
+  showToast(`✅ 已匯入 ${count} 筆客戶`);
+  initImportPage();
+}
+
+// ════════════════════════════════
+// 初始化所有後台頁面
+// ════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // 動態建立後台所需的 Modals
+  createAdminModals();
 });
+
+function createAdminModals(){
+  const modals = `
+  <!-- 商品編輯 Modal -->
+  <div class="modal-overlay" id="productEditorModal" style="display:none;"
+    onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-card" style="max-width:360px;">
+      <div class="modal-title"><i class="ti ti-package"></i> <span id="pe-title"></span></div>
+      <input type="hidden" id="pe-item-id" />
+      <div class="cust-form">
+        <div class="cust-field"><label>售價（$）</label>
+          <input type="number" id="pe-sale-price" min="0" /></div>
+        <div class="cust-field"><label>進貨價（$）</label>
+          <input type="number" id="pe-cost-price" min="0" /></div>
+        <div class="cust-field"><label>安全庫存量</label>
+          <input type="number" id="pe-safety-stock" min="0" /></div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-ok-btn" onclick="saveProductEdit()"><i class="ti ti-check"></i> 儲存</button>
+        <button class="modal-cancel-btn" onclick="document.getElementById('productEditorModal').style.display='none'">取消</button>
+      </div>
+      <button class="redit-btn" style="margin-top:8px;"
+        onclick="requireManager(()=>toggleProductActive(document.getElementById('pe-item-id').value))">
+        <i class="ti ti-power"></i> 切換啟用/停用
+      </button>
+    </div>
+  </div>
+
+  <!-- BOM 編輯 Modal -->
+  <div class="modal-overlay" id="bomEditorModal" style="display:none;"
+    onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-card">
+      <div class="modal-title"><i class="ti ti-git-merge"></i> <span id="bom-editor-title"></span></div>
+      <div class="search-bar" style="margin-bottom:10px;">
+        <i class="ti ti-search"></i>
+        <input type="search" id="bom-editor-search" placeholder="搜尋材料加入..."
+          oninput="bomEditorSearch(this.value)" />
+      </div>
+      <div id="bom-editor-search-result" style="display:none;max-height:200px;overflow-y:auto;"></div>
+      <div id="bom-editor-list" style="max-height:40vh;overflow-y:auto;"></div>
+      <div class="modal-actions">
+        <button class="modal-ok-btn" onclick="saveBomEditor()"><i class="ti ti-check"></i> 儲存</button>
+        <button class="modal-cancel-btn" onclick="document.getElementById('bomEditorModal').style.display='none'">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 廠商編輯 Modal -->
+  <div class="modal-overlay" id="supplierEditorModal" style="display:none;"
+    onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-card" style="max-height:90vh;overflow-y:auto;">
+      <div class="modal-title"><i class="ti ti-building-store"></i>
+        <span id="se-name"></span>
+        <span style="font-size:13px;color:var(--text3);margin-left:8px;" id="se-id"></span>
+      </div>
+      <input type="hidden" id="se-hidden-id" />
+      <div class="cust-form">
+        <div class="cust-field"><label>聯絡人</label><input type="text" id="se-contact" /></div>
+        <div class="cust-field"><label>電話</label><input type="tel" id="se-tel" /></div>
+        <div class="cust-field"><label>Email</label><input type="email" id="se-email" /></div>
+        <div class="cust-field"><label>Line</label><input type="text" id="se-line" /></div>
+        <div class="cust-form-section">銀行資訊</div>
+        <div class="cust-field"><label>銀行名稱</label><input type="text" id="se-bankName" /></div>
+        <div class="cust-field"><label>分行</label><input type="text" id="se-bankBranch" /></div>
+        <div class="cust-field"><label>代號</label><input type="text" id="se-bankCode" /></div>
+        <div class="cust-field"><label>戶名</label><input type="text" id="se-accountName" /></div>
+        <div class="cust-field"><label>帳號</label><input type="text" id="se-accountNo" /></div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-ok-btn" onclick="saveSupplierEditor()"><i class="ti ti-check"></i> 儲存</button>
+        <button class="modal-cancel-btn" onclick="document.getElementById('supplierEditorModal').style.display='none'">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新增地點 Modal -->
+  <div class="modal-overlay" id="addLocModal" style="display:none;"
+    onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-card" style="max-width:360px;">
+      <div class="modal-title"><i class="ti ti-map-pin"></i> 新增地點</div>
+      <div class="cust-form">
+        <div class="cust-field"><label>地點ID（英文，不能有空格）</label>
+          <input type="text" id="loc-id" placeholder="例：store_C" /></div>
+        <div class="cust-field"><label>地點名稱</label>
+          <input type="text" id="loc-name" placeholder="例：C 門市" /></div>
+        <div class="cust-field"><label>類型</label>
+          <select id="loc-type">
+            <option value="store_sub">子門市</option>
+            <option value="store_main">主倉儲</option>
+          </select></div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-ok-btn" onclick="saveNewLocation()"><i class="ti ti-check"></i> 新增</button>
+        <button class="modal-cancel-btn" onclick="document.getElementById('addLocModal').style.display='none'">取消</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', modals);
+}

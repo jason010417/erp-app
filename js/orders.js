@@ -178,7 +178,7 @@ function renderOrderEditPage(){
   if(!page) return;
   const o    = _currentOrder;
   const cust = getCustomer(o.customerId);
-  const isLocked = o.status === 'archived';
+  const isLocked = o.status === 'archived' && !isManager();
 
   page.innerHTML = `
     <div class="op-header">
@@ -344,9 +344,31 @@ function renderOrderEditPage(){
       </div>
     </div>
 
+    <!-- 生產單連結 -->
+    ${(() => {
+      const relProd = typeof productionOrders !== 'undefined'
+        ? productionOrders.filter(p => p.sourceOrderId === o.id)
+        : [];
+      if(!relProd.length) return '';
+      return `<div class="section-title" style="margin-top:14px;">
+        <i class="ti ti-player-play"></i> 相關生產單
+      </div>` + relProd.map(p => {
+        const step = typeof stepOf === 'function' ? stepOf(p.status) : {label:p.status,color:'#666',bg:'#eee'};
+        return `<div class="inv-warn-row" onclick="showProdDetail('${p.id}')">
+          <div>
+            <div style="font-size:14px;font-weight:600;">${p.no}</div>
+            <div style="font-size:12px;color:var(--text3);">${(p.items||[]).map(i=>i.name).join('、')}</div>
+          </div>
+          <span class="status-badge" style="background:${step.bg};color:${step.color};">
+            ${step.label}
+          </span>
+        </div>`;
+      }).join('');
+    })()}
+
     <!-- 操作按鈕 -->
-    ${!isLocked ? `
-    <button class="confirm-btn" style="background:var(--purple);margin-top:4px;"
+    ${o.status === 'pending' ? `
+    <button class="confirm-btn" style="background:var(--purple);margin-top:8px;"
       onclick="confirmOrder()">
       <i class="ti ti-check"></i> 確認訂單
     </button>` : ''}
@@ -359,6 +381,16 @@ function renderOrderEditPage(){
     <button class="confirm-btn" style="background:#185FA5;margin-top:8px;"
       onclick="archiveOrder('${o.id}')">
       <i class="ti ti-archive"></i> 結案
+    </button>` : ''}
+    ${isLocked && isManager() ? `
+    <button class="redit-btn" style="margin-top:8px;"
+      onclick="requireManager(()=>forceUnlockOrder('${o.id}'),'解鎖訂單需要主管權限')">
+      <i class="ti ti-lock-open"></i> 主管解鎖訂單
+    </button>` : ''}
+    ${!isLocked ? `
+    <button class="redit-btn" style="margin-top:8px;color:var(--red);border-color:var(--red);"
+      onclick="requireManager(()=>cancelOrder('${o.id}'),'取消訂單需要主管權限')">
+      <i class="ti ti-x"></i> 取消訂單
     </button>` : ''}`;
 
   renderOrderItems();
@@ -536,11 +568,18 @@ function saveOrderDraft(){
 function confirmOrder(){
   if(!_currentOrder.customerId){ showToast('⚠️ 請先選擇客戶'); return; }
   if(!_currentOrder.items.length){ showToast('⚠️ 請先加入品項'); return; }
+  // 防重複：已不是 pending 就不再執行
+  if(_currentOrder.id && _currentOrder.status !== 'pending' && _currentOrder.status !== undefined){
+    const existing = getOrder(_currentOrder.id);
+    if(existing && existing.status !== 'pending'){
+      showToast('⚠️ 此訂單已確認，請勿重複操作');
+      return;
+    }
+  }
   collectOrderForm();
   _currentOrder.status = 'pending';
   upsertOrder();
   showToast('✅ 訂單已確認：' + _currentOrder.no);
-  // 檢查庫存，決定是否需要生產
   checkInventoryAndProduceIfNeeded(_currentOrder);
 }
 
@@ -636,3 +675,43 @@ function showOrderDetail(id){
 document.addEventListener('DOMContentLoaded', () => {
   renderOrderList('all');
 });
+
+// ── 主管解鎖訂單（可修改已結案訂單）──
+function forceUnlockOrder(id){
+  const o = getOrder(id);
+  if(!o) return;
+  if(!confirm(`確定解鎖訂單 ${o.no}？\n解鎖後可以修改資料，修改完請重新結案。`)) return;
+  o.status    = 'shipped'; // 退回到已出貨狀態
+  o.updatedAt = todayStr();
+  const idx   = orders.findIndex(ord => ord.id === o.id);
+  if(idx >= 0) orders[idx] = o;
+  saveOrders();
+  _currentOrder = JSON.parse(JSON.stringify(o));
+  renderOrderEditPage();
+  showToast('🔓 訂單已解鎖，可進行修改');
+}
+
+// ── 主管取消訂單 ──
+function cancelOrder(id){
+  const o = getOrder(id || _currentOrder?.id);
+  if(!o) return;
+  if(!confirm(`確定取消訂單 ${o.no}？\n此操作無法復原。`)) return;
+  // 如果已出貨，歸還庫存
+  if(o.status === 'shipped'){
+    const locId = getMainLocation()?.id || 'store_A';
+    o.items.forEach(item => {
+      adjustStock(item.id, locId, item.shippedQty || 0, {
+        op:'stock_in', refId:o.id, refType:'order_cancel', note:`取消訂單歸還 ${o.no}`
+      });
+    });
+  }
+  o.status    = 'archived';
+  o.cancelled = true;
+  o.updatedAt = todayStr();
+  const idx   = orders.findIndex(ord => ord.id === o.id);
+  if(idx >= 0) orders[idx] = o;
+  saveOrders();
+  showToast('❌ 訂單已取消');
+  renderOrderList(_orderFilter);
+  showPage('orders');
+}

@@ -146,6 +146,11 @@ function showPage(name){
     'purchase-report': () => typeof initPurchaseReportPage === 'function' && initPurchaseReportPage(),
     'finance':         () => typeof initFinancePage        === 'function' && initFinancePage(),
     'unpaid':          () => typeof initUnpaidPage         === 'function' && initUnpaidPage(),
+    'admin-products':  () => typeof initAdminProductsPage  === 'function' && initAdminProductsPage(),
+    'admin-bom':       () => typeof initAdminBomPage       === 'function' && initAdminBomPage(),
+    'admin-suppliers': () => typeof initAdminSuppliersPage === 'function' && initAdminSuppliersPage(),
+    'admin-locations': () => typeof initLocationPage       === 'function' && initLocationPage(),
+    'admin-import':    () => typeof initImportPage         === 'function' && initImportPage(),
     'production':      () => typeof renderProductionList   === 'function' && renderProductionList('all'),
   };
   if(initMap[name]) initMap[name]();
