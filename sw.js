@@ -1,23 +1,51 @@
-const CACHE = 'erp-v29';
+const CACHE = 'erp-v2-build2';
 const ASSETS = [
-  './', './index.html', './css/style.css',
-  './js/data.js', './js/auth.js', './js/admin.js', './js/smartsearch.js', './js/firebase.js', './js/app.js', './js/order.js', './js/pos.js', './js/estimate.js', './js/report.js', './js/process.js', './js/event.js', './js/event_offline.js', './manifest.json',
-  'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css',
-  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js',
+  './',
+  './index.html',
+  './css/style.css',
+  './js/data.js',
+  './js/utils.js',
+  './js/logger.js',
+  './js/auth.js',
+  './js/locations.js',
+  './js/inventory.js',
+  './js/firebase.js',
+  './js/customers.js',
+  './js/smartsearch.js',
+  './js/inventory_ui.js',
+  './js/home.js',
+  './js/estimates.js',
+  './js/orders.js',
+  './js/production.js',
+  './js/purchase.js',
+  './js/transfer.js',
+  './js/pos.js',
+  './js/storeB.js',
+  './js/events.js',
+  './js/report.js',
+  './manifest.json',
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{}));
   self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(err => console.warn('Cache add failed:', err))
+  );
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
-  self.clients.claim();
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', e => {
+  // 網路優先（開發期間），避免快取問題
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => cached))
+    fetch(e.request).catch(() =>
+      caches.match(e.request)
+    )
   );
 });
