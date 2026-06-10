@@ -4298,3 +4298,42 @@ SUPPLIERS.forEach(s => { SUPPLIER_INDEX[s.id] = s; });
 function getItem(id)     { return ITEM_INDEX[id]     || null; }
 function getSupplier(id) { return SUPPLIER_INDEX[id] || null; }
 function getCategory(id) { return CATEGORIES[id]     || { name: id, emoji: '📦' }; }
+
+// ── 商品旗標系統（動態計算，不需要修改每筆資料）──
+// canSell:       可在 POS / 訂單賣給客人
+// canPurchase:   可建進貨單向廠商採購
+// canBeMaterial: 可作為 BOM 材料
+
+function computeItemFlags(item){
+  // 手動覆寫（後台設定的例外）
+  const overrides = JSON.parse(localStorage.getItem('erp_item_flags') || '{}');
+  if(overrides[item.id]) return overrides[item.id];
+
+  const hasSalePrice = item.salePrice && item.salePrice > 0;
+  const hasCostPrice = item.costPrice && item.costPrice > 0;
+
+  return {
+    canSell:       hasSalePrice,                    // 有售價 → 可賣
+    canPurchase:   hasCostPrice || !hasSalePrice,   // 有進貨價 或 沒有售價 → 可進貨
+    canBeMaterial: !hasSalePrice || hasCostPrice,   // 沒有售價 或 有進貨價 → 可當材料
+  };
+}
+
+// 快捷篩選函式
+function getSellableItems(){
+  return ALL_ITEMS.filter(i => computeItemFlags(i).canSell && i.active !== false);
+}
+function getPurchasableItems(){
+  return ALL_ITEMS.filter(i => computeItemFlags(i).canPurchase && i.active !== false);
+}
+function getMaterialItems(){
+  return ALL_ITEMS.filter(i => computeItemFlags(i).canBeMaterial && i.active !== false);
+}
+
+// 後台手動覆寫旗標（管理員）
+function setItemFlags(itemId, flags){
+  const all = JSON.parse(localStorage.getItem('erp_item_flags') || '{}');
+  all[itemId] = { ...computeItemFlags(getItem(itemId)), ...flags };
+  localStorage.setItem('erp_item_flags', JSON.stringify(all));
+  if(typeof pushToFirebase === 'function') pushToFirebase('itemFlags', all);
+}

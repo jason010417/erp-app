@@ -224,3 +224,32 @@ document.addEventListener('DOMContentLoaded', () => {
     updateNavActive('home');
   }, 300);
 });
+
+// ── 照片放大 lightbox ──
+function showFullImage(src){
+  let overlay = document.getElementById('lightbox-overlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'lightbox-overlay';
+    overlay.onclick = () => overlay.remove();
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `<img src="${src}" />`;
+  overlay.style.display = 'flex';
+}
+
+// ── 長按持續增減 ──
+let _lpTimer = null, _lpInterval = null;
+function startLongPress(idx, delta, ctx){
+  stopLongPress();
+  // 長按 600ms 後開始連續觸發
+  _lpTimer = setTimeout(() => {
+    _lpInterval = setInterval(() => {
+      if(ctx === 'ev' && typeof changeEvItemQty === 'function') changeEvItemQty(idx, delta);
+    }, 80);
+  }, 600);
+}
+function stopLongPress(){
+  if(_lpTimer)    { clearTimeout(_lpTimer);    _lpTimer    = null; }
+  if(_lpInterval) { clearInterval(_lpInterval); _lpInterval = null; }
+}

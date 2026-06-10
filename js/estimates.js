@@ -239,6 +239,32 @@ function renderEstItems(){
   }
   el.innerHTML = items.map((item, idx) => {
     const isDiscounted = item.unitPrice !== item.originalPrice;
+    // 客製化品項
+    if(item.isCustom){
+      const hasImages = (item.images||[]).length > 0;
+      return `<div class="order-row custom-item-row" onclick="openCustomItemModal('estimate',${idx})">
+        <div class="order-emoji">🎁</div>
+        <div class="order-info" style="flex:1;">
+          <div class="order-name" style="display:flex;align-items:center;gap:6px;">
+            ${item.name}
+            <span style="font-size:10px;padding:2px 6px;background:var(--purple-light);
+              color:var(--purple);border-radius:10px;">客製</span>
+            ${hasImages?`<i class="ti ti-photo" style="font-size:14px;color:var(--text3);" title="${item.images.length}張照片"></i>`:''}
+          </div>
+          <div class="order-id">
+            ${(item.materials||[]).length}種材料
+            ${item.remark?`・${item.remark.slice(0,20)}${item.remark.length>20?'…':''}`:'' }
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:16px;font-weight:700;">x${item.qty}</div>
+          <div style="font-size:13px;color:var(--purple);">$${item.unitPrice}</div>
+        </div>
+        <button class="order-del" onclick="event.stopPropagation();removeEstimateItem(${idx})">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>`;
+    }
     return `<div class="order-row">
       <div class="order-emoji">${item.emoji}</div>
       <div class="order-info">
@@ -396,8 +422,43 @@ function renderEstDetailPage(){
       </div>` : ''}
 
       <div class="section-title"><i class="ti ti-package"></i> 品項</div>
-      ${(e.items||[]).map(item => `
-        <div class="order-row" style="cursor:default;">
+      ${(e.items||[]).map(item => {
+        if(item.isCustom){
+          return `<div style="background:var(--purple-light);border:1px solid var(--purple-mid);
+            border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <span style="font-size:24px;">🎁</span>
+              <div style="flex:1;">
+                <div style="font-size:15px;font-weight:700;">${item.name}
+                  <span style="font-size:11px;background:var(--purple);color:white;
+                    padding:2px 6px;border-radius:10px;margin-left:6px;">客製</span>
+                </div>
+                ${item.remark?`<div style="font-size:12px;color:var(--text2);margin-top:2px;">${item.remark}</div>`:''}
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:16px;font-weight:700;">x${item.qty}</div>
+                <div style="font-size:13px;color:var(--purple);font-weight:700;">${fmtMoney(item.unitPrice*item.qty)}</div>
+              </div>
+            </div>
+            ${(item.materials||[]).length?`
+            <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">材料組合：</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+              ${(item.materials||[]).map(m=>`
+                <span style="padding:3px 8px;background:white;border:1px solid var(--border);
+                  border-radius:10px;font-size:11px;">${m.emoji||'📦'} ${m.name} x${m.qty}</span>
+              `).join('')}
+            </div>`:''}
+            ${(item.images||[]).length?`
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+              ${(item.images||[]).map(img=>`
+                <img src="${img}" style="width:64px;height:64px;object-fit:cover;
+                  border-radius:6px;border:1px solid var(--border);cursor:pointer;"
+                  onclick="showFullImage(this.src)" />
+              `).join('')}
+            </div>`:''}
+          </div>`;
+        }
+        return `<div class="order-row" style="cursor:default;">
           <div class="order-emoji">${item.emoji}</div>
           <div class="order-info">
             <div class="order-name">${item.name}</div>
@@ -411,7 +472,8 @@ function renderEstDetailPage(){
             <div style="font-size:16px;font-weight:700;">${item.qty} 個</div>
             <div style="font-size:13px;color:var(--text2);">${fmtMoney(item.unitPrice*item.qty)}</div>
           </div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
 
       <div class="amount-section" style="margin-top:10px;">
         <div class="amount-row"><span>小計</span><span>${fmtMoney(e.subtotal)}</span></div>
@@ -439,10 +501,26 @@ function renderEstDetailPage(){
       <i class="ti ti-x"></i> 取消此估價單
     </button>` : ''}
 
-    ${e.status === 'converted' && e.convertedOrderId ? `
-    <button class="confirm-btn" style="background:var(--green);"
-      onclick="showOrderDetail('${e.convertedOrderId}')">
-      <i class="ti ti-receipt-2"></i> 查看正式訂單 ${e.convertedOrderNo || ''}
+    ${e.status === 'converted' ? `
+    <div class="form-card" style="margin-top:10px;background:var(--green-light);border-color:var(--green-mid);">
+      <div style="font-size:13px;color:var(--green-dark);font-weight:600;margin-bottom:8px;">
+        <i class="ti ti-circle-check"></i> 此估價單已轉為正式訂單
+      </div>
+      ${e.convertedOrderId ? `
+      <button class="confirm-btn" style="background:var(--purple);margin-bottom:8px;"
+        onclick="showOrderDetail('${e.convertedOrderId}')">
+        <i class="ti ti-receipt-2"></i> 查看正式訂單 ${e.convertedOrderNo||''}
+      </button>` : ''}
+      ${e.convertedProdId ? `
+      <button class="confirm-btn" style="background:var(--green);"
+        onclick="showProdDetail('${e.convertedProdId}')">
+        <i class="ti ti-player-play"></i> 查看生產單
+      </button>` : ''}
+    </div>` : ''}
+    ${e.status === 'draft' || e.status === 'pending' ? `
+    <button class="redit-btn" style="margin-top:8px;color:var(--red);border-color:var(--red);"
+      onclick="requireAdmin(()=>hardDeleteEstimate('${e.id}'),'刪除估價單需要管理員權限')">
+      <i class="ti ti-trash"></i> 刪除估價單
     </button>` : ''}`;
 }
 
@@ -450,3 +528,13 @@ function renderEstDetailPage(){
 document.addEventListener('DOMContentLoaded', () => {
   renderEstimateList('all');
 });
+
+// ── 管理員永久刪除估價單 ──
+function hardDeleteEstimate(id){
+  if(!confirm('確定永久刪除此估價單？此操作無法復原。')) return;
+  estimates = estimates.filter(e => e.id !== id);
+  saveEstimates();
+  showToast('🗑️ 估價單已刪除');
+  renderEstimateList(_estFilter);
+  showPage('estimates');
+}

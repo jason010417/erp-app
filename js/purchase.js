@@ -47,7 +47,7 @@ function initPurchasePage(){
     <div class="search-bar">
       <i class="ti ti-search"></i>
       <input type="search" id="purchase-search"
-        placeholder="搜尋半成品或包材..."
+        placeholder="搜尋可進貨品項（原料、包材等）..."
         oninput="searchItemsFor('purchase',this.value)" />
     </div>
     <div id="purchase-search-result" style="display:none;"></div>

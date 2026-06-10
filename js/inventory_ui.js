@@ -131,9 +131,14 @@ function showItemDetail(productId){
 
   // 商品資訊
   html += `<div class="form-card" style="margin-top:10px;">
-    <div class="amount-row"><span>售價</span><span>$${item.salePrice}</span></div>
-    <div class="amount-row"><span>進貨價</span><span>$${item.costPrice}</span></div>
-    <div class="amount-row"><span>安全庫存</span><span>${item.safetyStock} ${item.unit}</span></div>
+    <div class="amount-row"><span>規格</span><span>${item.unit||'—'}</span></div>
+    <div class="amount-row"><span>售價</span><span style="font-weight:700;color:var(--purple);">$${item.salePrice||0}</span></div>
+    <div class="amount-row"><span>進貨價</span><span>$${item.costPrice||0}</span></div>
+    <div class="amount-row"><span>安全庫存</span>
+      <span style="color:${getTotalStock(item.id)<=(item.safetyStock||0)?'var(--red)':'var(--text)'};">
+        ${item.safetyStock||0} ${item.unit||'個'}
+      </span>
+    </div>
   </div>`;
 
   // BOM 組合

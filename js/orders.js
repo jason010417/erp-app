@@ -178,7 +178,8 @@ function renderOrderEditPage(){
   if(!page) return;
   const o    = _currentOrder;
   const cust = getCustomer(o.customerId);
-  const isLocked = o.status === 'archived' && !isManager();
+  const isLocked     = o.status === 'archived' && !isManager();
+  const isItemLocked = o.status !== 'pending' && !isAdmin();  // 確認後品項鎖定，管理員可解
 
   page.innerHTML = `
     <div class="op-header">
@@ -201,8 +202,11 @@ function renderOrderEditPage(){
       </div>
       ${o.estimateRef ? `
       <div style="padding:8px 12px;background:var(--purple-light);border-radius:var(--radius-sm);
-        font-size:13px;color:var(--purple);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+        font-size:13px;color:var(--purple);margin-bottom:10px;
+        display:flex;align-items:center;gap:6px;cursor:pointer;"
+        onclick="openEstimateById('${o.estimateId}')">
         <i class="ti ti-link"></i> 來源估價單：${o.estimateRef}
+        <i class="ti ti-chevron-right" style="margin-left:auto;"></i>
       </div>` : ''}
 
       <!-- 訂單來源 -->
@@ -229,12 +233,16 @@ function renderOrderEditPage(){
 
       <!-- 品項 -->
       <div class="form-section-title" style="margin-top:14px;">品項</div>
-      ${!isLocked ? `<div class="search-bar">
+      ${!isItemLocked ? `<div class="search-bar">
         <i class="ti ti-search"></i>
         <input type="search" id="order-item-search" placeholder="搜尋商品加入..."
           oninput="searchItemsFor('order',this.value)" />
       </div>
-      <div id="order-item-search-result" style="display:none;"></div>` : ''}
+      <div id="order-item-search-result" style="display:none;"></div>` : `
+      <div style="padding:8px 12px;background:var(--amber-light);border-radius:var(--radius-sm);
+        font-size:12px;color:var(--amber);display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <i class="ti ti-lock"></i> 訂單已確認，品項與金額已鎖定。如需修改請聯絡管理員。
+      </div>`}
       <div class="order-list-header">
         <span class="order-list-title">品項清單</span>
         <span class="order-count" id="ord-item-count">${o.items.length} 項</span>
@@ -248,14 +256,14 @@ function renderOrderEditPage(){
         <div class="amount-row discount-row">
           <span>整單折扣</span>
           <div class="discount-ctrl">
-            <select id="ord-discount-type" ${isLocked?'disabled':''} onchange="calcOrderTotal()">
+            <select id="ord-discount-type" ${isItemLocked||isLocked?'disabled':''} onchange="calcOrderTotal()">
               <option value="none"    ${o.orderDiscount?.type==='none'   ?'selected':''}>無折扣</option>
               <option value="percent" ${o.orderDiscount?.type==='percent'?'selected':''}>% 折扣</option>
               <option value="amount"  ${o.orderDiscount?.type==='amount' ?'selected':''}>$ 折抵</option>
             </select>
             <input type="number" id="ord-discount-value"
               value="${o.orderDiscount?.value||0}" min="0"
-              ${isLocked?'disabled':''} onchange="calcOrderTotal()"
+              ${isItemLocked||isLocked?'disabled':''} onchange="calcOrderTotal()"
               style="width:70px;" />
           </div>
         </div>
@@ -387,10 +395,15 @@ function renderOrderEditPage(){
       onclick="requireManager(()=>forceUnlockOrder('${o.id}'),'解鎖訂單需要主管權限')">
       <i class="ti ti-lock-open"></i> 主管解鎖訂單
     </button>` : ''}
-    ${!isLocked ? `
-    <button class="redit-btn" style="margin-top:8px;color:var(--red);border-color:var(--red);"
+    ${!isLocked && isManager() ? `
+    <button class="redit-btn" style="margin-top:8px;color:var(--amber);border-color:var(--amber);"
       onclick="requireManager(()=>cancelOrder('${o.id}'),'取消訂單需要主管權限')">
-      <i class="ti ti-x"></i> 取消訂單
+      <i class="ti ti-ban"></i> 取消訂單（保留記錄）
+    </button>` : ''}
+    ${isAdmin() ? `
+    <button class="redit-btn" style="margin-top:8px;color:var(--red);border-color:var(--red);"
+      onclick="requireAdmin(()=>hardDeleteOrder('${o.id}'))">
+      <i class="ti ti-trash"></i> 永久刪除訂單
     </button>` : ''}`;
 
   renderOrderItems();
@@ -478,13 +491,13 @@ function renderOrderItems(){
         </div>
       </div>
       <div class="qty-ctrl">
-        ${isLocked
+        ${isLocked||isItemLocked
           ? `<span class="qty-num">${item.qty}</span>`
           : `<button class="qty-btn" onclick="changeOrderItemQty(${idx},-1)">−</button>
              <span class="qty-num">${item.qty}</span>
              <button class="qty-btn" onclick="changeOrderItemQty(${idx},1)">＋</button>`}
       </div>
-      ${isLocked ? '' : `<button class="order-del" onclick="removeOrderItem(${idx})"><i class="ti ti-x"></i></button>`}
+      ${isLocked||isItemLocked ? '' : `<button class="order-del" onclick="removeOrderItem(${idx})"><i class="ti ti-x"></i></button>`}
     </div>`;
   }).join('');
 }
@@ -714,4 +727,22 @@ function cancelOrder(id){
   showToast('❌ 訂單已取消');
   renderOrderList(_orderFilter);
   showPage('orders');
+}
+
+// ── 管理員永久刪除訂單 ──
+function hardDeleteOrder(id){
+  if(!confirm('確定永久刪除此訂單？\n此操作無法復原，所有記錄將消失。')) return;
+  orders = orders.filter(o => o.id !== id);
+  saveOrders();
+  showToast('🗑️ 訂單已永久刪除');
+  renderOrderList(_orderFilter);
+  showPage('orders');
+}
+
+// ── 從估價單ID開啟估價單 ──
+function openEstimateById(id){
+  if(!id) return;
+  const e = typeof getEstimate === 'function' ? getEstimate(id) : null;
+  if(e){ openEstimateDetail(id); }
+  else { showToast('找不到對應的估價單'); }
 }

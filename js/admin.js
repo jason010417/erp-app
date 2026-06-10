@@ -177,7 +177,7 @@ function renderBomEditorList(){
 function bomEditorSearch(q){
   const res = document.getElementById('bom-editor-search-result');
   if(!res||!q){ if(res) res.style.display='none'; return; }
-  const pool = ALL_ITEMS.filter(i => !i.salePrice || i.salePrice === 0 || i.id.startsWith('MAT_'));
+  const pool = typeof getMaterialItems==='function' ? getMaterialItems() : ALL_ITEMS.filter(i => !i.salePrice || i.salePrice === 0);
   const results = pool.filter(i => i.name?.includes(q) || i.id?.includes(q)).slice(0,8);
   if(!results.length){ res.style.display='none'; return; }
   res.style.display = 'block';
@@ -296,36 +296,85 @@ function renderLocationList(){
   if(!el) return;
   const typeLabel = { store_main:'主倉儲', store_sub:'子門市', event:'外展' };
   el.innerHTML = locations.map(loc => `
-    <div class="admin-item">
-      <div style="width:40px;height:40px;border-radius:50%;
+    <div class="admin-item" style="gap:8px;">
+      <div style="width:40px;height:40px;border-radius:50%;flex-shrink:0;
         background:${loc.isMain?'var(--green-light)':'var(--blue-light)'};
-        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        display:flex;align-items:center;justify-content:center;">
         <i class="ti ti-building-store" style="font-size:20px;color:${loc.isMain?'var(--green)':'var(--blue)'};"></i>
       </div>
       <div style="flex:1;">
         <div class="admin-item-name">${loc.name}</div>
         <div class="admin-item-sub">${typeLabel[loc.type]||loc.type} ・ ID: ${loc.id}</div>
       </div>
-      <span class="status-badge ${loc.active?'badge-done':'badge-cancelled'}" style="font-size:11px;">
-        ${loc.active?'啟用':'停用'}
-      </span>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+        <span class="status-badge ${loc.active?'badge-done':'badge-cancelled'}" style="font-size:11px;">
+          ${loc.active?'啟用':'停用'}
+        </span>
+        <button class="small-btn" onclick="openEditLocationModal('${loc.id}')"
+          style="padding:6px 10px;font-size:12px;">
+          <i class="ti ti-edit"></i>
+        </button>
+        ${!loc.isMain?`<button class="small-btn" onclick="deleteLocation('${loc.id}')"
+          style="padding:6px 10px;font-size:12px;background:var(--red-light);color:var(--red);border-color:var(--red);">
+          <i class="ti ti-trash"></i>
+        </button>`:''}
+      </div>
     </div>`).join('') || '<div class="order-empty">尚未設定地點</div>';
 }
 
+let _editLocId = null;
 function openAddLocationModal(){
-  document.getElementById('addLocModal').style.display = 'flex';
-  ['loc-id','loc-name'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  _editLocId = null;
+  document.getElementById('addLocModal-title').textContent = '新增地點';
+  document.getElementById('loc-id').value   = '';
+  document.getElementById('loc-id').disabled = false;
+  document.getElementById('loc-name').value = '';
   document.getElementById('loc-type').value = 'store_sub';
+  document.getElementById('loc-active-row').style.display = 'none';
+  document.getElementById('addLocModal').style.display = 'flex';
+}
+function openEditLocationModal(id){
+  _editLocId = id;
+  const loc = locations.find(l=>l.id===id);
+  if(!loc) return;
+  document.getElementById('addLocModal-title').textContent = '編輯地點';
+  document.getElementById('loc-id').value    = loc.id;
+  document.getElementById('loc-id').disabled = true;  // ID 不可改
+  document.getElementById('loc-name').value  = loc.name;
+  document.getElementById('loc-type').value  = loc.type;
+  document.getElementById('loc-active-row').style.display = 'flex';
+  document.getElementById('loc-active').checked = loc.active !== false;
+  document.getElementById('addLocModal').style.display = 'flex';
 }
 function saveNewLocation(){
-  const id   = document.getElementById('loc-id')?.value.trim().replace(/\s/g,'_');
-  const name = document.getElementById('loc-name')?.value.trim();
-  const type = document.getElementById('loc-type')?.value;
+  const id     = document.getElementById('loc-id')?.value.trim().replace(/\s/g,'_');
+  const name   = document.getElementById('loc-name')?.value.trim();
+  const type   = document.getElementById('loc-type')?.value;
+  const active = document.getElementById('loc-active')?.checked ?? true;
   if(!id||!name){ showToast('⚠️ 請填寫地點ID和名稱'); return; }
-  if(locations.find(l=>l.id===id)){ showToast('⚠️ 此ID已存在'); return; }
-  addLocation({ id, name, type, isMain:type==='store_main', active:true });
+  if(_editLocId){
+    // 編輯
+    updateLocation(_editLocId, { name, type, isMain:type==='store_main', active });
+    showToast('✅ 地點已更新：' + name);
+  } else {
+    // 新增
+    if(locations.find(l=>l.id===id)){ showToast('⚠️ 此ID已存在'); return; }
+    addLocation({ id, name, type, isMain:type==='store_main', active:true });
+    showToast('✅ 地點已新增：' + name);
+  }
   document.getElementById('addLocModal').style.display = 'none';
-  showToast('✅ 地點已新增：' + name);
+  renderLocationList();
+}
+function deleteLocation(id){
+  const loc = locations.find(l=>l.id===id);
+  if(!loc) return;
+  if(loc.isMain){ showToast('⚠️ 主倉儲不可刪除'); return; }
+  const hasStock = ALL_ITEMS.some(i => (inventory[i.id]?.[id]||0) > 0);
+  if(hasStock){ showToast('⚠️ 此地點尚有庫存，請先調貨再刪除'); return; }
+  if(!confirm(`確定刪除地點「${loc.name}」？`)) return;
+  locations = locations.filter(l=>l.id!==id);
+  saveLocations();
+  showToast('🗑️ 地點已刪除');
   renderLocationList();
 }
 
@@ -338,34 +387,134 @@ function initImportPage(){
   page.innerHTML = `
     <div class="op-header">
       <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
-      <div class="op-title"><i class="ti ti-table-import" style="color:var(--purple);"></i> Excel 匯入</div>
+      <div class="op-title"><i class="ti ti-table-import" style="color:var(--purple);"></i> 資料管理</div>
     </div>
+
+    <!-- 現況 -->
     <div class="form-card">
       <div class="form-section-title">目前資料狀況</div>
       <div class="amount-row"><span>商品數量</span><strong>${ALL_ITEMS.length} 筆</strong></div>
       <div class="amount-row"><span>廠商數量</span><strong>${SUPPLIERS.length} 筆</strong></div>
       <div class="amount-row"><span>BOM 設定</span><strong>${Object.keys(BOM).length} 筆</strong></div>
       <div class="amount-row"><span>客戶數量</span><strong>${customers.length} 筆</strong></div>
+      <div class="amount-row"><span>訂單數量</span><strong>${orders.length} 筆</strong></div>
     </div>
-    <div class="form-card" style="margin-top:10px;">
-      <div class="form-section-title">匯入說明</div>
-      <div style="font-size:13px;color:var(--text2);line-height:1.8;">
-        商品、廠商、BOM 的資料已從 Excel 匯入到程式碼（data.js）。<br>
-        如需更新這些資料，請將新的 Excel 上傳給開發者重新匯入。<br><br>
-        目前可以從這裡匯入的資料：
+
+    <!-- 下載資料 -->
+    <div class="section-title" style="margin-top:14px;"><i class="ti ti-download"></i> 下載資料</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+      <button class="admin-item" onclick="exportCSV('products')" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <i class="ti ti-package" style="color:var(--green);font-size:22px;"></i>
+        <div class="admin-item-name">商品明細</div>
+        <div class="admin-item-sub">含售價/進貨價/庫存</div>
+      </button>
+      <button class="admin-item" onclick="exportCSV('suppliers')" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <i class="ti ti-building-store" style="color:var(--purple);font-size:22px;"></i>
+        <div class="admin-item-name">廠商資料</div>
+        <div class="admin-item-sub">含聯絡資料/銀行帳號</div>
+      </button>
+      <button class="admin-item" onclick="exportCSV('customers')" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <i class="ti ti-users" style="color:var(--blue);font-size:22px;"></i>
+        <div class="admin-item-name">客戶資料</div>
+        <div class="admin-item-sub">含聯絡/發票/收件</div>
+      </button>
+      <button class="admin-item" onclick="exportCSV('inventory')" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <i class="ti ti-packages" style="color:var(--amber);font-size:22px;"></i>
+        <div class="admin-item-name">庫存現況</div>
+        <div class="admin-item-sub">各地點庫存數量</div>
+      </button>
+      <button class="admin-item" onclick="exportCSV('orders')" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <i class="ti ti-receipt-2" style="color:var(--purple);font-size:22px;"></i>
+        <div class="admin-item-name">訂單記錄</div>
+        <div class="admin-item-sub">含品項/金額/狀態</div>
+      </button>
+      <button class="admin-item" onclick="exportCSV('sales')" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <i class="ti ti-chart-bar" style="color:var(--amber);font-size:22px;"></i>
+        <div class="admin-item-name">銷售記錄</div>
+        <div class="admin-item-sub">所有銷售明細</div>
+      </button>
+    </div>
+
+    <!-- 匯入客戶 -->
+    <div class="section-title"><i class="ti ti-upload"></i> 匯入客戶資料</div>
+    <div class="form-card">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">
+        CSV 格式：客戶名稱,聯絡人,電話,Email,地址（第一行可以是標題）
       </div>
-      <div style="margin-top:12px;">
-        <div class="form-section-title">匯入客戶資料（CSV）</div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">
-          格式：客戶名稱,聯絡人,電話,Email,地址
-        </div>
-        <input type="file" id="import-customer-file" accept=".csv"
-          style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:8px;
-          font-size:13px;background:var(--bg);"
-          onchange="previewCustomerImport(this)" />
-        <div id="import-preview" style="margin-top:10px;"></div>
-      </div>
+      <input type="file" id="import-customer-file" accept=".csv"
+        style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:8px;
+        font-size:13px;background:var(--bg);"
+        onchange="previewCustomerImport(this)" />
+      <div id="import-preview" style="margin-top:10px;"></div>
     </div>`;
+}
+
+// ── CSV 下載 ──
+function exportCSV(type){
+  let headers, rows, filename;
+  const BOM_MARK = '﻿';
+  switch(type){
+    case 'products':
+      headers = ['商品編號','品名','類別','單位','售價','進貨價','安全庫存','廠商'];
+      rows = ALL_ITEMS.map(i => [i.id, i.name, getCategory(i.category)?.name||'',
+        i.unit||'', i.salePrice||0, i.costPrice||0, i.safetyStock||0,
+        getSupplier(i.supplierId)?.name||'']);
+      filename = `商品明細_${todayStr()}.csv`;
+      break;
+    case 'suppliers':
+      headers = ['廠商編號','廠商名稱','聯絡人','電話','Email','Line','銀行','分行','代號','戶名','帳號'];
+      rows = SUPPLIERS.map(s => {
+        const ex = JSON.parse(localStorage.getItem('erp_sup_'+s.id)||'{}');
+        const m  = {...s,...ex};
+        return [m.id,m.name,m.contact||'',m.tel||'',m.email||'',m.line||'',
+          m.bankName||'',m.bankBranch||'',m.bankCode||'',m.accountName||'',m.accountNo||''];
+      });
+      filename = `廠商資料_${todayStr()}.csv`;
+      break;
+    case 'customers':
+      headers = ['客戶名稱','來源','承辦人','電話','Email','傳真','抬頭','統編','收件人','收件電話','地址'];
+      rows = customers.map(c => [c.name,c.source||'',c.contact||'',c.tel||'',c.email||'',
+        c.fax||'',c.invoiceTitle||'',c.taxId||'',c.receiver||'',c.receiverTel||'',c.address||'']);
+      filename = `客戶資料_${todayStr()}.csv`;
+      break;
+    case 'inventory':
+      headers = ['商品編號','品名','單位',...getStoreLocations().map(l=>l.name),'合計'];
+      rows = ALL_ITEMS.map(i => {
+        const locs = getStoreLocations().map(l => getStock(i.id,l.id));
+        return [i.id, i.name, i.unit||'個', ...locs, getTotalStock(i.id)];
+      });
+      filename = `庫存現況_${todayStr()}.csv`;
+      break;
+    case 'orders':
+      headers = ['訂單號','客戶','狀態','付款','建立日期','交期','物流','單號','總金額'];
+      rows = orders.map(o => {
+        const c = getCustomer(o.customerId);
+        const STATUS = {pending:'待處理',producing:'生產中',ready:'待出貨',shipped:'已出貨',archived:'已結案'};
+        const PAY    = {unpaid:'未收款',partial:'部分收款',paid:'已收款'};
+        return [o.no, c?.name||'', STATUS[o.status]||o.status, PAY[o.payStatus]||'',
+          o.createdAt||'', o.deliveryDate||'', o.logistics||'', o.trackingNo||'', o.totalAmount||0];
+      });
+      filename = `訂單記錄_${todayStr()}.csv`;
+      break;
+    case 'sales':
+      headers = ['時間','品項編號','品名','數量','單價','金額','付款方式','通路'];
+      rows = logs.filter(l=>l.op==='pos_sale'||l.op==='order_ship').map(l => [
+        l.time||'', l.productId||'', l.productName||'', l.qty||0,
+        l.unitPrice||0, l.amount||0, l.payMethod||'', l.eventId?'外展':'門市']);
+      filename = `銷售記錄_${todayStr()}.csv`;
+      break;
+    default: return;
+  }
+  const csv = BOM_MARK + [headers, ...rows].map(r =>
+    r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
+  ).join('
+');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ ${filename} 已下載`);
 }
 
 function previewCustomerImport(input){
@@ -495,11 +644,11 @@ function createAdminModals(){
     </div>
   </div>
 
-  <!-- 新增地點 Modal -->
+  <!-- 新增/編輯地點 Modal -->
   <div class="modal-overlay" id="addLocModal" style="display:none;"
     onclick="if(event.target===this)this.style.display='none'">
     <div class="modal-card" style="max-width:360px;">
-      <div class="modal-title"><i class="ti ti-map-pin"></i> 新增地點</div>
+      <div class="modal-title"><i class="ti ti-map-pin"></i> <span id="addLocModal-title">新增地點</span></div>
       <div class="cust-form">
         <div class="cust-field"><label>地點ID（英文，不能有空格）</label>
           <input type="text" id="loc-id" placeholder="例：store_C" /></div>
@@ -510,9 +659,15 @@ function createAdminModals(){
             <option value="store_sub">子門市</option>
             <option value="store_main">主倉儲</option>
           </select></div>
+        <div class="amount-row" id="loc-active-row" style="display:none;">
+          <span>狀態</span>
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="loc-active" checked /> 啟用
+          </label>
+        </div>
       </div>
       <div class="modal-actions">
-        <button class="modal-ok-btn" onclick="saveNewLocation()"><i class="ti ti-check"></i> 新增</button>
+        <button class="modal-ok-btn" onclick="saveNewLocation()"><i class="ti ti-check"></i> 儲存</button>
         <button class="modal-cancel-btn" onclick="document.getElementById('addLocModal').style.display='none'">取消</button>
       </div>
     </div>

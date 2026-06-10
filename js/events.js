@@ -186,9 +186,17 @@ function renderEvItemsList(){
         </div>
       </div>
       <div class="qty-ctrl">
-        <button class="qty-btn" onclick="changeEvItemQty(${idx},-1)">−</button>
+        <button class="qty-btn"
+          onclick="changeEvItemQty(${idx},-1)"
+          onmousedown="startLongPress(${idx},-1,'ev')"
+          onmouseup="stopLongPress()" onmouseleave="stopLongPress()"
+          ontouchstart="startLongPress(${idx},-1,'ev')" ontouchend="stopLongPress()">−</button>
         <span class="qty-num ${isTaking?'':'qty-zero'}">${item.takeQty||0}</span>
-        <button class="qty-btn" onclick="changeEvItemQty(${idx},1)">＋</button>
+        <button class="qty-btn"
+          onclick="changeEvItemQty(${idx},1)"
+          onmousedown="startLongPress(${idx},1,'ev')"
+          onmouseup="stopLongPress()" onmouseleave="stopLongPress()"
+          ontouchstart="startLongPress(${idx},1,'ev')" ontouchend="stopLongPress()">＋</button>
       </div>
     </div>`;
   }).join('');
