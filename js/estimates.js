@@ -506,16 +506,10 @@ function renderEstDetailPage(){
       <div style="font-size:13px;color:var(--green-dark);font-weight:600;margin-bottom:8px;">
         <i class="ti ti-circle-check"></i> 此估價單已轉為正式訂單
       </div>
-      ${e.convertedOrderId ? `
-      <button class="confirm-btn" style="background:var(--purple);margin-bottom:8px;"
+      ${e.convertedOrderId ? `<button class="confirm-btn" style="background:var(--purple);margin-bottom:8px;"
         onclick="showOrderDetail('${e.convertedOrderId}')">
         <i class="ti ti-receipt-2"></i> 查看正式訂單 ${e.convertedOrderNo||''}
-      </button>` : ''}
-      ${e.convertedProdId ? `
-      <button class="confirm-btn" style="background:var(--green);"
-        onclick="showProdDetail('${e.convertedProdId}')">
-        <i class="ti ti-player-play"></i> 查看生產單
-      </button>` : ''}
+      </button>` : `<div style="font-size:12px;color:var(--text2);">訂單資料同步中，請稍後再查看</div>`}
     </div>` : ''}
     ${e.status === 'draft' || e.status === 'pending' ? `
     <button class="redit-btn" style="margin-top:8px;color:var(--red);border-color:var(--red);"

@@ -128,15 +128,18 @@ function newOrderFromEstimate(estimate){
   };
 
   _currentOrder = o;
+
+  // 標記估價單為已轉單（先記錄，轉單後才能在估價單看到連結）
+  const est = typeof estimates !== 'undefined' ? estimates.find(e => e.id === estimate.id) : null;
+  if(est){
+    est.status           = 'converted';
+    est.convertedOrderId = null; // 先設 null，存檔後再更新
+    est.convertedOrderNo = o.no;
+    if(typeof saveEstimates === 'function') saveEstimates();
+  }
+
   renderOrderEditPage();
   showPage('order-edit');
-
-  // 標記估價單為已轉單
-  const est = estimates?.find(e => e.id === estimate.id);
-  if(est){
-    est.status = 'converted';
-    saveEstimates();
-  }
 }
 
 // ── 手動新增訂單 ──
@@ -570,6 +573,16 @@ function upsertOrder(){
   else         orders.push(copy);
   saveOrders();
   renderOrderList(_orderFilter);
+
+  // 回頭更新對應估價單的 convertedOrderId（確保連結正確）
+  if(_currentOrder.estimateId && typeof estimates !== 'undefined'){
+    const est = estimates.find(e => e.id === _currentOrder.estimateId);
+    if(est && est.status === 'converted' && !est.convertedOrderId){
+      est.convertedOrderId = _currentOrder.id;
+      est.convertedOrderNo = _currentOrder.no;
+      if(typeof saveEstimates === 'function') saveEstimates();
+    }
+  }
 }
 
 function saveOrderDraft(){

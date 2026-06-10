@@ -385,8 +385,8 @@ function initImportPage(){
       <div class="amount-row"><span>商品</span><strong>${ALL_ITEMS.length} 筆</strong></div>
       <div class="amount-row"><span>廠商</span><strong>${SUPPLIERS.length} 筆</strong></div>
       <div class="amount-row"><span>BOM</span><strong>${Object.keys(BOM).length} 筆</strong></div>
-      <div class="amount-row"><span>客戶</span><strong>${customers.length} 筆</strong></div>
-      <div class="amount-row"><span>訂單</span><strong>${orders.length} 筆</strong></div>
+      <div class="amount-row"><span>客戶</span><strong>${typeof customers !== 'undefined' ? customers.length : 0} 筆</strong></div>
+      <div class="amount-row"><span>訂單</span><strong>${typeof orders !== 'undefined' ? orders.length : 0} 筆</strong></div>
     </div>
     <div class="section-title" style="margin-top:14px;"><i class="ti ti-download"></i> 下載資料</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">

@@ -4337,3 +4337,15 @@ function setItemFlags(itemId, flags){
   localStorage.setItem('erp_item_flags', JSON.stringify(all));
   if(typeof pushToFirebase === 'function') pushToFirebase('itemFlags', all);
 }
+
+// ── 啟動時從 localStorage 覆蓋 BOM（admin 修改過的） ──
+function loadBomOverrides(){
+  try {
+    const saved = localStorage.getItem('erp_bom');
+    if(saved){
+      const overrides = JSON.parse(saved);
+      Object.keys(overrides).forEach(id => { BOM[id] = overrides[id]; });
+    }
+  } catch(e){ console.warn('BOM overrides load failed', e); }
+}
+document.addEventListener('DOMContentLoaded', loadBomOverrides);
