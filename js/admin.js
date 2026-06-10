@@ -1,10 +1,8 @@
-// ============================================================
-// admin.js — 後台管理：商品、BOM、廠商、地點、Excel匯入
-// ============================================================
+// admin.js - Backend management: Products, BOM, Suppliers, Locations, Data Export
 
-// ════════════════════════════════
-// 商品管理
-// ════════════════════════════════
+// ================================
+// Product Management
+// ================================
 function initAdminProductsPage(){
   const page = document.getElementById('page-admin-products');
   if(!page) return;
@@ -47,7 +45,7 @@ function renderAdminProducts(q = ''){
       <span style="font-size:28px;">${item.emoji}</span>
       <div style="flex:1;min-width:0;">
         <div class="admin-item-name">${item.name}</div>
-        <div class="admin-item-sub">${item.id} ・ 售價 $${item.salePrice||0} ・ 庫存 ${getTotalStock(item.id)}</div>
+        <div class="admin-item-sub">${item.id} / $${item.salePrice||0} / 庫存 ${getTotalStock(item.id)}</div>
       </div>
       <span class="status-badge ${item.active===false?'badge-cancelled':'badge-done'}" style="font-size:11px;">
         ${item.active===false?'停用':'啟用'}
@@ -58,13 +56,12 @@ function renderAdminProducts(q = ''){
 function openProductEditor(id){
   const item = getItem(id);
   if(!item) return;
-  const modal = document.getElementById('productEditorModal');
   document.getElementById('pe-title').textContent   = item.name;
   document.getElementById('pe-sale-price').value    = item.salePrice || 0;
   document.getElementById('pe-cost-price').value    = item.costPrice || 0;
   document.getElementById('pe-safety-stock').value  = item.safetyStock || 0;
   document.getElementById('pe-item-id').value       = id;
-  modal.style.display = 'flex';
+  document.getElementById('productEditorModal').style.display = 'flex';
 }
 function saveProductEdit(){
   const id   = document.getElementById('pe-item-id').value;
@@ -73,10 +70,9 @@ function saveProductEdit(){
   item.salePrice   = parseInt(document.getElementById('pe-sale-price').value)   || 0;
   item.costPrice   = parseInt(document.getElementById('pe-cost-price').value)   || 0;
   item.safetyStock = parseInt(document.getElementById('pe-safety-stock').value) || 0;
-  // 同步 Firebase
   if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', buildProductOverrides());
   document.getElementById('productEditorModal').style.display = 'none';
-  showToast('✅ 商品已更新');
+  showToast('商品已更新');
   renderAdminProducts(document.getElementById('ap-search')?.value || '');
 }
 function buildProductOverrides(){
@@ -92,13 +88,13 @@ function toggleProductActive(id){
   item.active = !item.active;
   if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', buildProductOverrides());
   document.getElementById('productEditorModal').style.display = 'none';
-  showToast(item.active ? '✅ 商品已啟用' : '🚫 商品已停用');
+  showToast(item.active ? '商品已啟用' : '商品已停用');
   renderAdminProducts('');
 }
 
-// ════════════════════════════════
-// BOM 管理
-// ════════════════════════════════
+// ================================
+// BOM Management
+// ================================
 function initAdminBomPage(){
   const page = document.getElementById('page-admin-bom');
   if(!page) return;
@@ -119,12 +115,12 @@ function initAdminBomPage(){
 function renderBomList(q = ''){
   const el = document.getElementById('bom-list');
   if(!el) return;
-  let list = ALL_ITEMS.filter(i => i.salePrice > 0); // 只顯示有售價的（成品）
+  let list = ALL_ITEMS.filter(i => i.salePrice > 0);
   if(q) list = list.filter(i => i.name.includes(q) || i.id.includes(q));
   const withBom    = list.filter(i => (BOM[i.id]||[]).length > 0);
   const withoutBom = list.filter(i => !(BOM[i.id]||[]).length);
   el.innerHTML = `<div style="font-size:12px;color:var(--text2);padding:6px 0;margin-bottom:4px;">
-    已設定 ${withBom.length} 個 ／ 未設定 ${withoutBom.length} 個</div>` +
+    已設定 ${withBom.length} / 未設定 ${withoutBom.length}</div>` +
   [...withBom, ...withoutBom].map(item => {
     const bom = BOM[item.id] || [];
     return `<div class="admin-item" onclick="openBomEditor('${item.id}')">
@@ -134,14 +130,13 @@ function renderBomList(q = ''){
         <div class="admin-item-sub">${item.id}</div>
       </div>
       ${bom.length
-        ? `<span class="status-badge badge-done" style="font-size:11px;">✅ ${bom.length} 種材料</span>`
+        ? `<span class="status-badge badge-done" style="font-size:11px;">${bom.length} 種材料</span>`
         : `<span class="status-badge badge-draft" style="font-size:11px;">未設定</span>`}
     </div>`;
   }).join('');
 }
 
-let _bomEditorId    = null;
-let _bomEditorItems = [];
+let _bomEditorId = null, _bomEditorItems = [];
 function openBomEditor(id){
   _bomEditorId    = id;
   const item      = getItem(id);
@@ -177,18 +172,20 @@ function renderBomEditorList(){
 function bomEditorSearch(q){
   const res = document.getElementById('bom-editor-search-result');
   if(!res||!q){ if(res) res.style.display='none'; return; }
-  const pool = typeof getMaterialItems==='function' ? getMaterialItems() : ALL_ITEMS.filter(i => !i.salePrice || i.salePrice === 0);
+  const pool = typeof getMaterialItems==='function' ? getMaterialItems() : ALL_ITEMS.filter(i => !i.salePrice);
   const results = pool.filter(i => i.name?.includes(q) || i.id?.includes(q)).slice(0,8);
   if(!results.length){ res.style.display='none'; return; }
   res.style.display = 'block';
-  res.innerHTML = results.map(m => `
-    <div class="ss-item" onmousedown="bomEditorAddMat('${m.id}','${m.name.replace(/'/g,"\\'")}')">
+  res.innerHTML = results.map(m => {
+    const safeName = m.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `<div class="ss-item" onmousedown="bomEditorAddMat('${m.id}','${safeName}')">
       <span class="ss-emoji">${m.emoji||'📦'}</span>
       <div class="ss-info"><div class="ss-name">${m.name}</div><div class="ss-sub">${m.id}</div></div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 function bomEditorAddMat(id, name){
-  if(_bomEditorItems.find(i=>i.id===id||i.materialId===id)){showToast('已在清單中');return;}
+  if(_bomEditorItems.find(i=>i.id===id||i.materialId===id)){ showToast('已在清單中'); return; }
   _bomEditorItems.push({ materialId:id, materialName:name, qty:1 });
   document.getElementById('bom-editor-search').value = '';
   document.getElementById('bom-editor-search-result').style.display = 'none';
@@ -199,13 +196,13 @@ function saveBomEditor(){
   localStorage.setItem('erp_bom', JSON.stringify(BOM));
   if(typeof pushToFirebase === 'function') pushToFirebase('bom', BOM);
   document.getElementById('bomEditorModal').style.display = 'none';
-  showToast('✅ BOM 已儲存');
+  showToast('BOM 已儲存');
   renderBomList(document.getElementById('bom-search')?.value || '');
 }
 
-// ════════════════════════════════
-// 廠商管理
-// ════════════════════════════════
+// ================================
+// Supplier Management
+// ================================
 function initAdminSuppliersPage(){
   const page = document.getElementById('page-admin-suppliers');
   if(!page) return;
@@ -235,7 +232,7 @@ function renderAdminSuppliers(q = ''){
         color:var(--purple);flex-shrink:0;">${s.phonetic||'?'}</div>
       <div style="flex:1;min-width:0;">
         <div class="admin-item-name">${s.name}</div>
-        <div class="admin-item-sub">${s.id}${s.tel?' ・ '+s.tel:''}</div>
+        <div class="admin-item-sub">${s.id}</div>
       </div>
       <i class="ti ti-chevron-right" style="color:var(--text3);"></i>
     </div>`).join('') || '<div class="order-empty">找不到廠商</div>';
@@ -244,13 +241,11 @@ function renderAdminSuppliers(q = ''){
 function openSupplierEditor(id){
   const s = SUPPLIERS.find(sup => sup.id === id);
   if(!s) return;
-  // 合併 Firebase/localStorage 裡的額外聯絡資料
   const extra = JSON.parse(localStorage.getItem('erp_sup_' + id) || '{}');
   const merged = { ...s, ...extra };
   document.getElementById('se-id').textContent   = merged.id;
   document.getElementById('se-name').textContent = merged.name;
-  const fields = ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo'];
-  fields.forEach(f => {
+  ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo'].forEach(f => {
     const el = document.getElementById('se-' + f);
     if(el) el.value = merged[f] || '';
   });
@@ -259,23 +254,21 @@ function openSupplierEditor(id){
 }
 function saveSupplierEditor(){
   const id = document.getElementById('se-hidden-id').value;
-  const fields = ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo'];
   const data = {};
-  fields.forEach(f => { data[f] = document.getElementById('se-'+f)?.value.trim() || ''; });
-  // 存到 localStorage
+  ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo']
+    .forEach(f => { data[f] = document.getElementById('se-'+f)?.value.trim() || ''; });
   localStorage.setItem('erp_sup_' + id, JSON.stringify(data));
-  // 同步到 Firebase
   if(typeof _db !== 'undefined' && _db){
-    _db.ref(`erp/supplierDetails/${id}`).set(data).catch(()=>{});
+    _db.ref('erp/supplierDetails/' + id).set(data).catch(()=>{});
   }
   document.getElementById('supplierEditorModal').style.display = 'none';
-  showToast('✅ 廠商資料已儲存');
+  showToast('廠商資料已儲存');
   renderAdminSuppliers(document.getElementById('sup-search')?.value || '');
 }
 
-// ════════════════════════════════
-// 地點管理
-// ════════════════════════════════
+// ================================
+// Location Management
+// ================================
 function initLocationPage(){
   const page = document.getElementById('page-admin-locations');
   if(!page) return;
@@ -304,7 +297,7 @@ function renderLocationList(){
       </div>
       <div style="flex:1;">
         <div class="admin-item-name">${loc.name}</div>
-        <div class="admin-item-sub">${typeLabel[loc.type]||loc.type} ・ ID: ${loc.id}</div>
+        <div class="admin-item-sub">${typeLabel[loc.type]||loc.type} / ID: ${loc.id}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
         <span class="status-badge ${loc.active?'badge-done':'badge-cancelled'}" style="font-size:11px;">
@@ -326,20 +319,20 @@ let _editLocId = null;
 function openAddLocationModal(){
   _editLocId = null;
   document.getElementById('addLocModal-title').textContent = '新增地點';
-  document.getElementById('loc-id').value   = '';
+  document.getElementById('loc-id').value    = '';
   document.getElementById('loc-id').disabled = false;
-  document.getElementById('loc-name').value = '';
-  document.getElementById('loc-type').value = 'store_sub';
+  document.getElementById('loc-name').value  = '';
+  document.getElementById('loc-type').value  = 'store_sub';
   document.getElementById('loc-active-row').style.display = 'none';
   document.getElementById('addLocModal').style.display = 'flex';
 }
 function openEditLocationModal(id){
   _editLocId = id;
-  const loc = locations.find(l=>l.id===id);
+  const loc = locations.find(l => l.id === id);
   if(!loc) return;
   document.getElementById('addLocModal-title').textContent = '編輯地點';
   document.getElementById('loc-id').value    = loc.id;
-  document.getElementById('loc-id').disabled = true;  // ID 不可改
+  document.getElementById('loc-id').disabled = true;
   document.getElementById('loc-name').value  = loc.name;
   document.getElementById('loc-type').value  = loc.type;
   document.getElementById('loc-active-row').style.display = 'flex';
@@ -351,36 +344,34 @@ function saveNewLocation(){
   const name   = document.getElementById('loc-name')?.value.trim();
   const type   = document.getElementById('loc-type')?.value;
   const active = document.getElementById('loc-active')?.checked ?? true;
-  if(!id||!name){ showToast('⚠️ 請填寫地點ID和名稱'); return; }
+  if(!id||!name){ showToast('請填寫地點ID和名稱'); return; }
   if(_editLocId){
-    // 編輯
     updateLocation(_editLocId, { name, type, isMain:type==='store_main', active });
-    showToast('✅ 地點已更新：' + name);
+    showToast('地點已更新：' + name);
   } else {
-    // 新增
-    if(locations.find(l=>l.id===id)){ showToast('⚠️ 此ID已存在'); return; }
+    if(locations.find(l=>l.id===id)){ showToast('此ID已存在'); return; }
     addLocation({ id, name, type, isMain:type==='store_main', active:true });
-    showToast('✅ 地點已新增：' + name);
+    showToast('地點已新增：' + name);
   }
   document.getElementById('addLocModal').style.display = 'none';
   renderLocationList();
 }
 function deleteLocation(id){
-  const loc = locations.find(l=>l.id===id);
+  const loc = locations.find(l => l.id === id);
   if(!loc) return;
-  if(loc.isMain){ showToast('⚠️ 主倉儲不可刪除'); return; }
+  if(loc.isMain){ showToast('主倉儲不可刪除'); return; }
   const hasStock = ALL_ITEMS.some(i => (inventory[i.id]?.[id]||0) > 0);
-  if(hasStock){ showToast('⚠️ 此地點尚有庫存，請先調貨再刪除'); return; }
-  if(!confirm(`確定刪除地點「${loc.name}」？`)) return;
-  locations = locations.filter(l=>l.id!==id);
+  if(hasStock){ showToast('此地點尚有庫存，請先調貨再刪除'); return; }
+  if(!confirm('確定刪除地點「' + loc.name + '」？')) return;
+  locations = locations.filter(l => l.id !== id);
   saveLocations();
-  showToast('🗑️ 地點已刪除');
+  showToast('地點已刪除');
   renderLocationList();
 }
 
-// ════════════════════════════════
-// Excel 匯入
-// ════════════════════════════════
+// ================================
+// Data Export & Import
+// ================================
 function initImportPage(){
   const page = document.getElementById('page-admin-import');
   if(!page) return;
@@ -389,18 +380,14 @@ function initImportPage(){
       <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
       <div class="op-title"><i class="ti ti-table-import" style="color:var(--purple);"></i> 資料管理</div>
     </div>
-
-    <!-- 現況 -->
     <div class="form-card">
       <div class="form-section-title">目前資料狀況</div>
-      <div class="amount-row"><span>商品數量</span><strong>${ALL_ITEMS.length} 筆</strong></div>
-      <div class="amount-row"><span>廠商數量</span><strong>${SUPPLIERS.length} 筆</strong></div>
-      <div class="amount-row"><span>BOM 設定</span><strong>${Object.keys(BOM).length} 筆</strong></div>
-      <div class="amount-row"><span>客戶數量</span><strong>${customers.length} 筆</strong></div>
-      <div class="amount-row"><span>訂單數量</span><strong>${orders.length} 筆</strong></div>
+      <div class="amount-row"><span>商品</span><strong>${ALL_ITEMS.length} 筆</strong></div>
+      <div class="amount-row"><span>廠商</span><strong>${SUPPLIERS.length} 筆</strong></div>
+      <div class="amount-row"><span>BOM</span><strong>${Object.keys(BOM).length} 筆</strong></div>
+      <div class="amount-row"><span>客戶</span><strong>${customers.length} 筆</strong></div>
+      <div class="amount-row"><span>訂單</span><strong>${orders.length} 筆</strong></div>
     </div>
-
-    <!-- 下載資料 -->
     <div class="section-title" style="margin-top:14px;"><i class="ti ti-download"></i> 下載資料</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
       <button class="admin-item" onclick="exportCSV('products')" style="flex-direction:column;align-items:flex-start;gap:4px;">
@@ -411,7 +398,7 @@ function initImportPage(){
       <button class="admin-item" onclick="exportCSV('suppliers')" style="flex-direction:column;align-items:flex-start;gap:4px;">
         <i class="ti ti-building-store" style="color:var(--purple);font-size:22px;"></i>
         <div class="admin-item-name">廠商資料</div>
-        <div class="admin-item-sub">含聯絡資料/銀行帳號</div>
+        <div class="admin-item-sub">含聯絡/銀行帳號</div>
       </button>
       <button class="admin-item" onclick="exportCSV('customers')" style="flex-direction:column;align-items:flex-start;gap:4px;">
         <i class="ti ti-users" style="color:var(--blue);font-size:22px;"></i>
@@ -434,12 +421,10 @@ function initImportPage(){
         <div class="admin-item-sub">所有銷售明細</div>
       </button>
     </div>
-
-    <!-- 匯入客戶 -->
     <div class="section-title"><i class="ti ti-upload"></i> 匯入客戶資料</div>
     <div class="form-card">
       <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">
-        CSV 格式：客戶名稱,聯絡人,電話,Email,地址（第一行可以是標題）
+        CSV 格式：客戶名稱,聯絡人,電話,Email,地址
       </div>
       <input type="file" id="import-customer-file" accept=".csv"
         style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:8px;
@@ -449,17 +434,16 @@ function initImportPage(){
     </div>`;
 }
 
-// ── CSV 下載 ──
 function exportCSV(type){
   let headers, rows, filename;
-  const BOM_MARK = '﻿';
+  const BOM_MARK = '\uFEFF';
   switch(type){
     case 'products':
       headers = ['商品編號','品名','類別','單位','售價','進貨價','安全庫存','廠商'];
       rows = ALL_ITEMS.map(i => [i.id, i.name, getCategory(i.category)?.name||'',
         i.unit||'', i.salePrice||0, i.costPrice||0, i.safetyStock||0,
         getSupplier(i.supplierId)?.name||'']);
-      filename = `商品明細_${todayStr()}.csv`;
+      filename = '商品明細_' + todayStr() + '.csv';
       break;
     case 'suppliers':
       headers = ['廠商編號','廠商名稱','聯絡人','電話','Email','Line','銀行','分行','代號','戶名','帳號'];
@@ -469,13 +453,13 @@ function exportCSV(type){
         return [m.id,m.name,m.contact||'',m.tel||'',m.email||'',m.line||'',
           m.bankName||'',m.bankBranch||'',m.bankCode||'',m.accountName||'',m.accountNo||''];
       });
-      filename = `廠商資料_${todayStr()}.csv`;
+      filename = '廠商資料_' + todayStr() + '.csv';
       break;
     case 'customers':
       headers = ['客戶名稱','來源','承辦人','電話','Email','傳真','抬頭','統編','收件人','收件電話','地址'];
       rows = customers.map(c => [c.name,c.source||'',c.contact||'',c.tel||'',c.email||'',
         c.fax||'',c.invoiceTitle||'',c.taxId||'',c.receiver||'',c.receiverTel||'',c.address||'']);
-      filename = `客戶資料_${todayStr()}.csv`;
+      filename = '客戶資料_' + todayStr() + '.csv';
       break;
     case 'inventory':
       headers = ['商品編號','品名','單位',...getStoreLocations().map(l=>l.name),'合計'];
@@ -483,38 +467,34 @@ function exportCSV(type){
         const locs = getStoreLocations().map(l => getStock(i.id,l.id));
         return [i.id, i.name, i.unit||'個', ...locs, getTotalStock(i.id)];
       });
-      filename = `庫存現況_${todayStr()}.csv`;
+      filename = '庫存現況_' + todayStr() + '.csv';
       break;
     case 'orders':
       headers = ['訂單號','客戶','狀態','付款','建立日期','交期','物流','單號','總金額'];
       rows = orders.map(o => {
         const c = getCustomer(o.customerId);
-        const STATUS = {pending:'待處理',producing:'生產中',ready:'待出貨',shipped:'已出貨',archived:'已結案'};
-        const PAY    = {unpaid:'未收款',partial:'部分收款',paid:'已收款'};
-        return [o.no, c?.name||'', STATUS[o.status]||o.status, PAY[o.payStatus]||'',
-          o.createdAt||'', o.deliveryDate||'', o.logistics||'', o.trackingNo||'', o.totalAmount||0];
+        const ST = {pending:'待處理',producing:'生產中',ready:'待出貨',shipped:'已出貨',archived:'已結案'};
+        const PY = {unpaid:'未收款',partial:'部分收款',paid:'已收款'};
+        return [o.no,c?.name||'',ST[o.status]||o.status,PY[o.payStatus]||'',
+          o.createdAt||'',o.deliveryDate||'',o.logistics||'',o.trackingNo||'',o.totalAmount||0];
       });
-      filename = `訂單記錄_${todayStr()}.csv`;
+      filename = '訂單記錄_' + todayStr() + '.csv';
       break;
     case 'sales':
-      headers = ['時間','品項編號','品名','數量','單價','金額','付款方式','通路'];
-      rows = logs.filter(l=>l.op==='pos_sale'||l.op==='order_ship').map(l => [
-        l.time||'', l.productId||'', l.productName||'', l.qty||0,
-        l.unitPrice||0, l.amount||0, l.payMethod||'', l.eventId?'外展':'門市']);
-      filename = `銷售記錄_${todayStr()}.csv`;
+      headers = ['時間','品項編號','品名','數量','單價','金額','付款方式'];
+      rows = logs.filter(l=>l.op==='pos_sale'||l.op==='order_ship').map(l =>
+        [l.time||'',l.productId||'',l.productName||'',l.qty||0,l.unitPrice||0,l.amount||0,l.payMethod||'']);
+      filename = '銷售記錄_' + todayStr() + '.csv';
       break;
     default: return;
   }
-  const csv = BOM_MARK + [headers, ...rows].map(r =>
-    r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
-  ).join('
-');
-  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const csv  = BOM_MARK + [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
+  a.href=url; a.download=filename; a.click();
   URL.revokeObjectURL(url);
-  showToast(`✅ ${filename} 已下載`);
+  showToast(filename + ' 已下載');
 }
 
 function previewCustomerImport(input){
@@ -522,17 +502,17 @@ function previewCustomerImport(input){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const lines = e.target.result.split('\n').filter(l=>l.trim());
+    const lines   = e.target.result.split('\n').filter(l=>l.trim());
     const preview = lines.slice(0,5).map(l => l.split(','));
-    const el = document.getElementById('import-preview');
-    el.innerHTML = `<div style="font-size:13px;color:var(--text2);margin-bottom:8px;">
+    const el      = document.getElementById('import-preview');
+    el.innerHTML  = `<div style="font-size:13px;color:var(--text2);margin-bottom:8px;">
       預覽（共 ${lines.length} 筆）：</div>` +
       preview.map(cols=>`<div style="padding:6px;border-bottom:1px solid var(--border);font-size:12px;">
         ${cols.map(c=>`<span style="margin-right:8px;">${c.trim()}</span>`).join('')}
       </div>`).join('') +
       `<button class="confirm-btn" style="margin-top:10px;"
         onclick="doImportCustomers()">
-        <i class="ti ti-check"></i> 確認匯入 ${lines.length} 筆客戶
+        確認匯入 ${lines.length} 筆客戶
       </button>`;
     window._importCustomerData = lines;
   };
@@ -544,47 +524,34 @@ function doImportCustomers(){
   let count = 0;
   lines.forEach(line => {
     const cols = line.split(',').map(c => c.trim());
-    if(!cols[0]) return;
+    if(!cols[0] || cols[0]==='客戶名稱') return;
     customers.push({
-      id:      'C' + Date.now() + Math.random().toString(36).slice(2,5),
-      name:    cols[0] || '',
-      contact: cols[1] || '',
-      tel:     cols[2] || '',
-      email:   cols[3] || '',
-      address: cols[4] || '',
-      source:  'phone',
-      createdAt: todayStr(),
+      id:        'C' + Date.now() + Math.random().toString(36).slice(2,5),
+      name:      cols[0]||'', contact:cols[1]||'', tel:cols[2]||'',
+      email:     cols[3]||'', address:cols[4]||'',
+      source:    'phone', createdAt: todayStr(),
     });
     count++;
   });
   if(typeof saveCustomers === 'function') saveCustomers();
-  showToast(`✅ 已匯入 ${count} 筆客戶`);
+  showToast('已匯入 ' + count + ' 筆客戶');
   initImportPage();
 }
 
-// ════════════════════════════════
-// 初始化所有後台頁面
-// ════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
-  // 動態建立後台所需的 Modals
-  createAdminModals();
-});
-
+// ================================
+// Modals (dynamic creation)
+// ================================
 function createAdminModals(){
   const modals = `
-  <!-- 商品編輯 Modal -->
   <div class="modal-overlay" id="productEditorModal" style="display:none;"
     onclick="if(event.target===this)this.style.display='none'">
     <div class="modal-card" style="max-width:360px;">
       <div class="modal-title"><i class="ti ti-package"></i> <span id="pe-title"></span></div>
       <input type="hidden" id="pe-item-id" />
       <div class="cust-form">
-        <div class="cust-field"><label>售價（$）</label>
-          <input type="number" id="pe-sale-price" min="0" /></div>
-        <div class="cust-field"><label>進貨價（$）</label>
-          <input type="number" id="pe-cost-price" min="0" /></div>
-        <div class="cust-field"><label>安全庫存量</label>
-          <input type="number" id="pe-safety-stock" min="0" /></div>
+        <div class="cust-field"><label>售價（$）</label><input type="number" id="pe-sale-price" min="0" /></div>
+        <div class="cust-field"><label>進貨價（$）</label><input type="number" id="pe-cost-price" min="0" /></div>
+        <div class="cust-field"><label>安全庫存量</label><input type="number" id="pe-safety-stock" min="0" /></div>
       </div>
       <div class="modal-actions">
         <button class="modal-ok-btn" onclick="saveProductEdit()"><i class="ti ti-check"></i> 儲存</button>
@@ -597,7 +564,6 @@ function createAdminModals(){
     </div>
   </div>
 
-  <!-- BOM 編輯 Modal -->
   <div class="modal-overlay" id="bomEditorModal" style="display:none;"
     onclick="if(event.target===this)this.style.display='none'">
     <div class="modal-card">
@@ -616,7 +582,6 @@ function createAdminModals(){
     </div>
   </div>
 
-  <!-- 廠商編輯 Modal -->
   <div class="modal-overlay" id="supplierEditorModal" style="display:none;"
     onclick="if(event.target===this)this.style.display='none'">
     <div class="modal-card" style="max-height:90vh;overflow-y:auto;">
@@ -644,7 +609,6 @@ function createAdminModals(){
     </div>
   </div>
 
-  <!-- 新增/編輯地點 Modal -->
   <div class="modal-overlay" id="addLocModal" style="display:none;"
     onclick="if(event.target===this)this.style.display='none'">
     <div class="modal-card" style="max-width:360px;">
@@ -672,6 +636,9 @@ function createAdminModals(){
       </div>
     </div>
   </div>`;
-
   document.body.insertAdjacentHTML('beforeend', modals);
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  createAdminModals();
+});
