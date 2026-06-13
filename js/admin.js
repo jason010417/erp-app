@@ -54,13 +54,17 @@ function renderAdminProducts(q = ''){
 }
 
 function openProductEditor(id){
-  const item = getItem(id);
+  const item  = getItem(id);
   if(!item) return;
-  document.getElementById('pe-title').textContent   = item.name;
-  document.getElementById('pe-sale-price').value    = item.salePrice || 0;
-  document.getElementById('pe-cost-price').value    = item.costPrice || 0;
-  document.getElementById('pe-safety-stock').value  = item.safetyStock || 0;
-  document.getElementById('pe-item-id').value       = id;
+  const flags = computeItemFlags(item);
+  document.getElementById('pe-title').textContent        = item.name;
+  document.getElementById('pe-sale-price').value         = item.salePrice || 0;
+  document.getElementById('pe-cost-price').value         = item.costPrice || 0;
+  document.getElementById('pe-safety-stock').value       = item.safetyStock || 0;
+  document.getElementById('pe-item-id').value            = id;
+  document.getElementById('pe-can-sell').checked         = flags.canSell;
+  document.getElementById('pe-can-material').checked     = flags.canBeMaterial;
+  document.getElementById('pe-can-purchase').checked     = flags.canPurchase;
   document.getElementById('productEditorModal').style.display = 'flex';
 }
 function saveProductEdit(){
@@ -70,6 +74,23 @@ function saveProductEdit(){
   item.salePrice   = parseInt(document.getElementById('pe-sale-price').value)   || 0;
   item.costPrice   = parseInt(document.getElementById('pe-cost-price').value)   || 0;
   item.safetyStock = parseInt(document.getElementById('pe-safety-stock').value) || 0;
+  // 儲存旗標覆寫（只在與自動判斷不同時才寫入，避免冗余）
+  const autoFlags = computeItemFlags(item);
+  const newFlags  = {
+    canSell:       document.getElementById('pe-can-sell').checked,
+    canBeMaterial: document.getElementById('pe-can-material').checked,
+    canPurchase:   document.getElementById('pe-can-purchase').checked,
+  };
+  const changed = Object.keys(newFlags).some(k => newFlags[k] !== autoFlags[k]);
+  if(changed){
+    setItemFlags(id, newFlags);
+  } else {
+    // 清除手動覆寫，讓系統重新自動計算
+    const all = JSON.parse(localStorage.getItem('erp_item_flags') || '{}');
+    delete all[id];
+    localStorage.setItem('erp_item_flags', JSON.stringify(all));
+    if(typeof pushToFirebase === 'function') pushToFirebase('itemFlags', all);
+  }
   if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', buildProductOverrides());
   document.getElementById('productEditorModal').style.display = 'none';
   showToast('商品已更新');
@@ -115,7 +136,10 @@ function initAdminBomPage(){
 function renderBomList(q = ''){
   const el = document.getElementById('bom-list');
   if(!el) return;
-  let list = ALL_ITEMS.filter(i => i.salePrice > 0);
+  // 顯示：有售價的成品 + 有 BOM 設定的半成品（雙重身份品項）
+  let list = ALL_ITEMS.filter(i =>
+    i.active !== false && (i.salePrice > 0 || (BOM[i.id]?.length ?? 0) > 0)
+  );
   if(q) list = list.filter(i => i.name.includes(q) || i.id.includes(q));
   const withBom    = list.filter(i => (BOM[i.id]||[]).length > 0);
   const withoutBom = list.filter(i => !(BOM[i.id]||[]).length);
@@ -552,6 +576,24 @@ function createAdminModals(){
         <div class="cust-field"><label>售價（$）</label><input type="number" id="pe-sale-price" min="0" /></div>
         <div class="cust-field"><label>進貨價（$）</label><input type="number" id="pe-cost-price" min="0" /></div>
         <div class="cust-field"><label>安全庫存量</label><input type="number" id="pe-safety-stock" min="0" /></div>
+        <div class="cust-field" style="flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="font-weight:600;color:var(--text2);font-size:12px;min-width:80px;">品項屬性</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;">
+            <input type="checkbox" id="pe-can-sell" />
+            <span><i class="ti ti-receipt" style="font-size:12px;"></i> 可銷售</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;">
+            <input type="checkbox" id="pe-can-material" />
+            <span><i class="ti ti-git-merge" style="font-size:12px;"></i> 可作為 BOM 材料</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;">
+            <input type="checkbox" id="pe-can-purchase" />
+            <span><i class="ti ti-package-import" style="font-size:12px;"></i> 可採購</span>
+          </label>
+        </div>
+        <div style="font-size:11px;color:var(--text3);padding:0 4px;">
+          ⚠️ 勾選後會覆蓋系統自動判斷（依售價/進價）
+        </div>
       </div>
       <div class="modal-actions">
         <button class="modal-ok-btn" onclick="saveProductEdit()"><i class="ti ti-check"></i> 儲存</button>

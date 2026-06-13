@@ -167,12 +167,12 @@ function searchItemsFor(context, q){
   }[context];
 
   const poolMap = {
-    estimate:   FINISHED,
-    order:      FINISHED,
-    pos:        FINISHED,
-    storeB:     FINISHED,
-    purchase:   [...SEMI, ...PACKAGING],
-    production: FINISHED,
+    estimate:   getSellableItems(),              // 只顯示可銷售品項
+    order:      getSellableItems(),              // 同上（含 canSell 旗標覆寫的半成品）
+    pos:        getSellableItems(),
+    storeB:     getSellableItems(),
+    purchase:   getPurchasableItems(),           // 可採購品項（原料、半成品、包材）
+    production: FINISHED,                        // 生產選成品：全品項
   };
 
   const res = document.getElementById(resId);

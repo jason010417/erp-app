@@ -511,10 +511,10 @@ function renderEstDetailPage(){
         <i class="ti ti-receipt-2"></i> 查看正式訂單 ${e.convertedOrderNo||''}
       </button>` : `<div style="font-size:12px;color:var(--text2);">訂單資料同步中，請稍後再查看</div>`}
     </div>` : ''}
-    ${e.status === 'draft' || e.status === 'pending' ? `
+    ${isAdmin() ? `
     <button class="redit-btn" style="margin-top:8px;color:var(--red);border-color:var(--red);"
       onclick="requireAdmin(()=>hardDeleteEstimate('${e.id}'),'刪除估價單需要管理員權限')">
-      <i class="ti ti-trash"></i> 刪除估價單
+      <i class="ti ti-trash"></i> 永久刪除估價單
     </button>` : ''}`;
 }
 

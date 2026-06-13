@@ -151,7 +151,7 @@ function renderPurchaseEditPage(){
   const isReceived = pu.status === 'received' || pu.status === 'completed';
   const isOrdered  = pu.status === 'ordered';
   const isDraft    = pu.status === 'draft' || !pu.status;
-  const isEditable = isDraft;  // 下單後鎖定品項與廠商
+  const isEditable = isDraft || isAdmin();  // 管理員可強制編輯任何狀態
 
   page.innerHTML = `
     <div class="op-header">
@@ -269,6 +269,11 @@ function renderPurchaseEditPage(){
       style="margin-top:8px;color:var(--red);border-color:var(--red);"
       onclick="cancelPurchase('${pu.id||''}')">
       <i class="ti ti-ban"></i> 取消採購單
+    </button>` : ''}
+    ${isAdmin() && pu.id ? `
+    <button class="redit-btn" style="margin-top:8px;color:var(--red);border-color:var(--red);"
+      onclick="requireAdmin(()=>hardDeletePurchase('${pu.id}'),'永久刪除採購單需要管理員權限')">
+      <i class="ti ti-trash"></i> 永久刪除採購單
     </button>` : ''}`;
 
   renderPuItems();
@@ -352,7 +357,7 @@ function renderPuItems(){
   const count = document.getElementById('pu-item-count');
   if(!el || !_currentPurchase) return;
   const items      = _currentPurchase.items;
-  const isEditable = _currentPurchase.status === 'draft' || !_currentPurchase.status;
+  const isEditable = _currentPurchase.status === 'draft' || !_currentPurchase.status || isAdmin();
   if(count) count.textContent = items.length + ' 項';
   if(!items.length){
     el.innerHTML = '<div class="order-empty">請搜尋商品加入進貨清單</div>';
@@ -565,6 +570,16 @@ function initSupplierPickerModal(){
       </button>
     </div>`;
   document.body.appendChild(modal);
+}
+
+// ── 管理員永久刪除採購單 ──
+function hardDeletePurchase(id){
+  if(!confirm('確定永久刪除此採購單？此操作無法復原。')) return;
+  purchases = purchases.filter(p => p.id !== id);
+  savePurchases();
+  showToast('🗑️ 採購單已刪除');
+  renderPurchaseList(_puFilter);
+  showPage('purchase');
 }
 
 // ── 舊版相容（report.js 呼叫）──

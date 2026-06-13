@@ -353,6 +353,11 @@ function renderProdDetailPage(){
       <div style="text-align:center;padding:14px;color:var(--green);font-size:15px;font-weight:600;">
         <i class="ti ti-circle-check"></i> 此生產單已完成出貨
       </div>` : ''}
+      ${isAdmin() ? `
+      <button class="redit-btn" style="margin-top:8px;color:var(--red);border-color:var(--red);"
+        onclick="requireAdmin(()=>hardDeleteProduction('${p.id}'),'永久刪除生產單需要管理員權限')">
+        <i class="ti ti-trash"></i> 永久刪除生產單
+      </button>` : ''}
     </div>
 
     <!-- 狀態記錄 -->
@@ -425,6 +430,16 @@ function advanceProdStatus(id){
   renderProdDetailPage();
   renderProductionList(_prodFilter);
   showToast(`✅ 狀態已更新為「${next.label}」`);
+}
+
+// ── 管理員永久刪除生產單 ──
+function hardDeleteProduction(id){
+  if(!confirm('確定永久刪除此生產單？此操作無法復原。')) return;
+  productionOrders = productionOrders.filter(p => p.id !== id);
+  saveProdOrders();
+  showToast('🗑️ 生產單已刪除');
+  renderProductionList(_prodFilter);
+  showPage('production');
 }
 
 // 初始化

@@ -275,6 +275,8 @@ function renderOrderEditPage(){
   const isRetail = (o.orderType || 'project') === 'retail';
   const isLocked     = o.status === 'archived' && !isManager();
   const isItemLocked = o.status !== 'pending' && !isAdmin();  // 確認後品項鎖定，管理員可解
+  // 管理員強制編輯中（非草稿狀態）
+  const adminOverride = isAdmin() && o.status !== 'pending';
 
   page.innerHTML = `
     <div class="op-header">
@@ -288,6 +290,12 @@ function renderOrderEditPage(){
              <i class="ti ti-lock"></i> 已結案
            </span>`}
     </div>
+
+    ${adminOverride ? `
+    <div style="padding:8px 12px;background:#FFF3CD;border-radius:var(--radius-sm);
+      font-size:12px;color:#856404;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+      <i class="ti ti-shield-lock"></i> 管理員覆寫模式 — 所有欄位與品項均可修改
+    </div>` : ''}
 
     <div class="form-card">
       <!-- 單號 / 類型 -->
@@ -522,17 +530,21 @@ function addOrderItem(productId){
   const existing = _currentOrder.items.find(i => i.id === productId);
   if(existing){ existing.qty++; }
   else {
+    const price = item.salePrice || 0;
     _currentOrder.items.push({
       id:            productId,
       name:          item.name,
       emoji:         item.emoji,
       qty:           1,
-      originalPrice: item.salePrice,
-      unitPrice:     item.salePrice,
+      originalPrice: price,
+      unitPrice:     price,
       discount:      null,
       shippedQty:    0,
       producedQty:   0,
     });
+    if(!price){
+      showToast('⚠️ 此品項尚未設定售價，請手動填入單價');
+    }
   }
   renderOrderItems();
   calcOrderTotal();
@@ -583,11 +595,12 @@ function renderOrderItems(){
         <div class="order-id" style="display:flex;align-items:center;gap:6px;">
           ${isDis?`<span style="text-decoration:line-through;color:var(--text3);font-size:11px;">$${item.originalPrice}</span>`:''}
           ${isLocked
-            ? `<span style="font-weight:700;">$${item.unitPrice}</span>`
+            ? `<span style="font-weight:700;${item.unitPrice===0?'color:var(--red);':''}">${item.unitPrice===0?'⚠️ ':''}$${item.unitPrice}</span>`
             : `<input type="number" class="unit-price-input ${isDis?'discounted':''}"
                 value="${item.unitPrice}" min="0"
+                style="${(!item.unitPrice && item.unitPrice!==undefined)?'border-color:var(--amber);background:#FFFBF0;':''}"
                 onchange="changeOrderItemPrice(${idx},this.value)"
-                onclick="this.select()" />`}
+                onclick="this.select()" title="${!item.unitPrice?'尚未設定售價，請填入':''}" />`}
         </div>
       </div>
       <div class="qty-ctrl">

@@ -4305,17 +4305,22 @@ function getCategory(id) { return CATEGORIES[id]     || { name: id, emoji: '📦
 // canBeMaterial: 可作為 BOM 材料
 
 function computeItemFlags(item){
-  // 手動覆寫（後台設定的例外）
+  // 手動覆寫優先（後台在商品編輯器設定的例外）
   const overrides = JSON.parse(localStorage.getItem('erp_item_flags') || '{}');
   if(overrides[item.id]) return overrides[item.id];
 
   const hasSalePrice = item.salePrice && item.salePrice > 0;
   const hasCostPrice = item.costPrice && item.costPrice > 0;
+  // 有 BOM 定義的品項視為半成品，預設可作材料
+  const hasBom       = (typeof BOM !== 'undefined') && (BOM[item.id]?.length ?? 0) > 0;
 
   return {
-    canSell:       hasSalePrice,                    // 有售價 → 可賣
-    canPurchase:   hasCostPrice || !hasSalePrice,   // 有進貨價 或 沒有售價 → 可進貨
-    canBeMaterial: !hasSalePrice || hasCostPrice,   // 沒有售價 或 有進貨價 → 可當材料
+    // 有售價 → 可賣；有 costPrice 也算可賣（可議價的半成品商品）
+    canSell:       hasSalePrice || hasCostPrice,
+    // 有進貨價 或 無售價（半成品/原料）→ 可進貨
+    canPurchase:   hasCostPrice || !hasSalePrice,
+    // 沒有售價（半成品/包材）或 有進貨價 或 有 BOM → 可當材料
+    canBeMaterial: !hasSalePrice || hasCostPrice || hasBom,
   };
 }
 
