@@ -138,6 +138,8 @@ function showPage(name){
     'admin-locations': () => typeof renderLocationList     === 'function' && renderLocationList(),
     'purchase':        () => typeof initPurchasePage       === 'function' && initPurchasePage(),
     'purchase-edit':   () => {},
+    'gift-orders':     () => typeof initGiftOrdersPage     === 'function' && initGiftOrdersPage(),
+    'processing':      () => typeof initProcessingPage     === 'function' && initProcessingPage(),
     'transfer':        () => typeof renderTransferList     === 'function' && renderTransferList(),
     'pos-a':           () => typeof initPOS                === 'function' && initPOS(),
     'store-b-sales':   () => typeof initStoreBPage         === 'function' && initStoreBPage(),

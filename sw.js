@@ -1,4 +1,4 @@
-const CACHE = 'erp-v2-build7';
+const CACHE = 'erp-v2-build9';
 const ASSETS = [
   './',
   './index.html',
@@ -23,6 +23,9 @@ const ASSETS = [
   './js/storeB.js',
   './js/events.js',
   './js/report.js',
+  './js/gift.js',
+  './js/processing.js',
+  './js/admin.js',
   './manifest.json',
 ];
 

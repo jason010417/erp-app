@@ -164,15 +164,17 @@ function searchItemsFor(context, q){
     storeB:     'storeB-search-result',
     purchase:   'purchase-search-result',
     production: 'prod-item-search-result',
+    gift:       'gift-item-search-result',
   }[context];
 
   const poolMap = {
-    estimate:   getSellableItems(),              // 只顯示可銷售品項
-    order:      getSellableItems(),              // 同上（含 canSell 旗標覆寫的半成品）
+    estimate:   getSellableItems(),
+    order:      getSellableItems(),
     pos:        getSellableItems(),
     storeB:     getSellableItems(),
-    purchase:   getPurchasableItems(),           // 可採購品項（原料、半成品、包材）
-    production: FINISHED,                        // 生產選成品：全品項
+    purchase:   getPurchasableItems(),
+    production: FINISHED,
+    gift:       ALL_ITEMS,                       // 贈品出庫：全品項（含半成品報廢）
   };
 
   const res = document.getElementById(resId);
@@ -210,6 +212,7 @@ function addItemTo(context, itemId){
     storeB:     'storeB-search-result',
     purchase:   'purchase-search-result',
     production: 'prod-item-search-result',
+    gift:       'gift-item-search-result',
   }[context];
   const searchId = {
     estimate:   'est-item-search',
@@ -218,6 +221,7 @@ function addItemTo(context, itemId){
     storeB:     'storeB-search',
     purchase:   'purchase-search',
     production: 'prod-item-search',
+    gift:       'gift-item-search',
   }[context];
 
   const el = document.getElementById(resId);
@@ -232,6 +236,7 @@ function addItemTo(context, itemId){
     storeB:     'addStoreBItem',
     purchase:   'addPurchaseItem',
     production: 'addProductionItem',
+    gift:       'addGiftItem',
   };
   if(typeof window[fnMap[context]] === 'function') window[fnMap[context]](itemId);
 }

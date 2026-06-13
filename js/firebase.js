@@ -117,6 +117,7 @@ function applyRemoteData(data){
     events:           'erp_events',
     storeBSales:      'erp_storeb_sales',
     giftOrders:       'erp_gift_orders',
+    processingLogs:   'erp_processing_logs',
   };
   Object.keys(collectionMap).forEach(key => {
     if(data[key]){
@@ -133,6 +134,7 @@ function applyRemoteData(data){
         events:           'events',
         storeBSales:      'storeBSales',
         giftOrders:       'giftOrders',
+        processingLogs:   'processingLogs',
       };
       if(typeof window[varMap[key]] !== 'undefined') window[varMap[key]] = arr;
     }
