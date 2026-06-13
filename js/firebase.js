@@ -102,6 +102,11 @@ function applyRemoteData(data){
     localStorage.setItem('erp_product_overrides', JSON.stringify(data.productOverrides));
     applyProductOverrides(data.productOverrides);
   }
+  if(data.customItems && typeof applyCustomItems === 'function'){
+    const list = Array.isArray(data.customItems) ? data.customItems : Object.values(data.customItems);
+    localStorage.setItem('erp_custom_items', JSON.stringify(list));
+    applyCustomItems(list);
+  }
   if(data.logs){
     const remote = typeof data.logs === 'object' ? Object.values(data.logs) : data.logs;
     // 合併，避免覆蓋本機未上傳的記錄
@@ -122,6 +127,7 @@ function applyRemoteData(data){
     storeBSales:      'erp_storeb_sales',
     giftOrders:       'erp_gift_orders',
     processingLogs:   'erp_processing_logs',
+    customItems:      'erp_custom_items',
   };
   Object.keys(collectionMap).forEach(key => {
     if(data[key]){
@@ -139,6 +145,7 @@ function applyRemoteData(data){
         storeBSales:      'storeBSales',
         giftOrders:       'giftOrders',
         processingLogs:   'processingLogs',
+        customItems:      'customItems',
       };
       if(typeof window[varMap[key]] !== 'undefined') window[varMap[key]] = arr;
     }

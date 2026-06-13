@@ -4354,6 +4354,20 @@ try {
   if(_savedOv) applyProductOverrides(JSON.parse(_savedOv));
 } catch(e) {}
 
+// ── 自定義商品（透過 CSV 匯入新增，延伸 data.js）──
+function applyCustomItems(list){
+  const items = list || (() => {
+    try { return JSON.parse(localStorage.getItem('erp_custom_items') || '[]'); } catch(e){ return []; }
+  })();
+  items.forEach(item => {
+    if(item && item.id && !ITEM_INDEX[item.id]){
+      ALL_ITEMS.push(item);
+      ITEM_INDEX[item.id] = item;
+    }
+  });
+}
+try { applyCustomItems(); } catch(e){}
+
 // 後台手動覆寫旗標（管理員）
 function setItemFlags(itemId, flags){
   const all = JSON.parse(localStorage.getItem('erp_item_flags') || '{}');

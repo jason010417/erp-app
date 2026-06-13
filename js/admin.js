@@ -654,14 +654,54 @@ function doImport(type){
     // 支援兩種格式：
     //   商品售價（4欄）：商品編號, 售價, 進貨價, 安全庫存
     //   商品明細（8欄）：商品編號, 品名, 類別, 單位, 售價, 進貨價, 安全庫存, 廠商
+    let newCount = 0;
+    const _catByName = name =>
+      Object.keys(CATEGORIES).find(k => CATEGORIES[k]?.name === name) || '009';
+
     rows.forEach(cols => {
       const id = cols[0];
       if(!id || id === '商品編號') return;
-      const item = ITEM_INDEX[id];
-      if(!item) return;
-      // 自動偵測格式：若第2欄是非數字文字 → 商品明細格式，售價從第5欄(index 4)開始
+
       const isDetailFormat = cols.length >= 5 && isNaN(parseInt(cols[1]));
       const offset = isDetailFormat ? 4 : 1;
+
+      let item = ITEM_INDEX[id];
+
+      // 商品明細格式 + 系統中沒有此品項 → 自動新增
+      if(!item && isDetailFormat){
+        const catId = _catByName(cols[2] || '');
+        item = {
+          id,
+          name:        cols[1] || id,
+          category:    catId,
+          unit:        cols[3] || '個',
+          emoji:       CATEGORIES[catId]?.emoji || '📦',
+          salePrice:   parseInt(cols[4]) || 0,
+          costPrice:   parseInt(cols[5]) || 0,
+          safetyStock: parseInt(cols[6]) || 0,
+          active:      true,
+        };
+        ALL_ITEMS.push(item);
+        ITEM_INDEX[id] = item;
+        // 初始化庫存（各地點設 0）
+        if(typeof inventory !== 'undefined' && !inventory[id]){
+          inventory[id] = {};
+          if(typeof getStoreLocations === 'function')
+            getStoreLocations().forEach(l => { inventory[id][l.id] = 0; });
+        }
+        // 儲存自定義商品清單
+        const custom = JSON.parse(localStorage.getItem('erp_custom_items') || '[]');
+        const ei = custom.findIndex(c => c.id === id);
+        if(ei >= 0) custom[ei] = item; else custom.push(item);
+        localStorage.setItem('erp_custom_items', JSON.stringify(custom));
+        if(typeof pushToFirebase === 'function') pushToFirebase('customItems', custom);
+        newCount++;
+        count++;
+        return;
+      }
+
+      if(!item) return;
+
       const vSale   = cols[offset];
       const vCost   = cols[offset + 1];
       const vSafety = cols[offset + 2];
@@ -671,7 +711,9 @@ function doImport(type){
       count++;
     });
     _saveProductOverrides();
-    showToast(`✅ 已更新 ${count} 筆商品售價`);
+    if(newCount > 0) saveInventory();
+    const _newMsg = newCount > 0 ? `，新增 ${newCount} 筆新商品` : '';
+    showToast(`✅ 已更新 ${count - newCount} 筆售價${_newMsg}`, 3000);
 
   } else if(type === 'customers'){
     // 格式：客戶名稱, 聯絡人, 電話, Email, 地址
