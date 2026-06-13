@@ -595,48 +595,97 @@ function saveOrderDraft(){
 function confirmOrder(){
   if(!_currentOrder.customerId){ showToast('⚠️ 請先選擇客戶'); return; }
   if(!_currentOrder.items.length){ showToast('⚠️ 請先加入品項'); return; }
-  // 防重複：已不是 pending 就不再執行
-  if(_currentOrder.id && _currentOrder.status !== 'pending' && _currentOrder.status !== undefined){
+  if(_currentOrder.id){
     const existing = getOrder(_currentOrder.id);
     if(existing && existing.status !== 'pending'){
-      showToast('⚠️ 此訂單已確認，請勿重複操作');
-      return;
+      showToast('⚠️ 此訂單已確認，請勿重複操作'); return;
     }
   }
   collectOrderForm();
-  _currentOrder.status = 'pending';
-  upsertOrder();
-  showToast('✅ 訂單已確認：' + _currentOrder.no);
-  checkInventoryAndProduceIfNeeded(_currentOrder);
-}
 
-// ── 庫存檢查：現貨足夠→備貨，不足→建生產單 ──
-function checkInventoryAndProduceIfNeeded(order){
-  const needProduction = [];
-  order.items.forEach(item => {
-    const stock = getStock(item.id, getMainLocation()?.id || 'store_A');
-    if(stock >= item.qty){
-      // 現貨足夠，保留庫存（出貨時才扣）
-    } else {
-      // 庫存不足，需要生產
-      needProduction.push({ ...item, produceQty: item.qty - stock });
-    }
-  });
+  // ① 先算庫存缺口，不存檔
+  const locId = getMainLocation()?.id || 'store_A';
+  const needProduction = _currentOrder.items
+    .map(item => {
+      const stock = getStock(item.id, locId);
+      return stock < item.qty
+        ? { ...item, stock, produceQty: item.qty - stock }
+        : null;
+    })
+    .filter(Boolean);
 
   if(needProduction.length){
-    // 自動建立生產單
-    if(typeof newProductionFromOrder === 'function'){
-      newProductionFromOrder(order, needProduction);
-    }
-    _currentOrder.status = 'producing';
-    upsertOrder();
-    showToast(`📦 已建立生產單（${needProduction.length} 項商品庫存不足）`);
+    // ② 有缺料 → 顯示 Modal 讓使用者確認再動作
+    _showConfirmProductionModal(_currentOrder, needProduction);
   } else {
-    // 全部現貨，直接進入待出貨
+    // ③ 全部現貨 → 直接存一次，進待出貨
     _currentOrder.status = 'ready';
     upsertOrder();
-    showToast('✅ 現貨充足，訂單進入待出貨');
+    showToast('✅ 現貨充足，訂單進入待出貨：' + _currentOrder.no);
+    showOrderDetail(_currentOrder.id);
   }
+}
+
+// ── 缺料確認 Modal ──
+function _showConfirmProductionModal(order, needProduction){
+  const existing = document.getElementById('confirmProdModal');
+  if(existing) existing.remove();
+
+  const rows = needProduction.map(i => `
+    <div style="display:flex;justify-content:space-between;align-items:center;
+      padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;">
+      <span>${i.emoji} ${i.name}</span>
+      <span style="color:var(--red);font-weight:600;">
+        需 ${i.qty}，現貨 ${i.stock}，缺 <strong>${i.produceQty}</strong>
+      </span>
+    </div>`).join('');
+
+  const modal = document.createElement('div');
+  modal.className    = 'modal-overlay';
+  modal.id           = 'confirmProdModal';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="modal-card" style="max-width:380px;">
+      <div class="modal-title" style="color:var(--amber);">
+        <i class="ti ti-alert-triangle"></i> 庫存不足，需建立生產單
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">
+        以下 ${needProduction.length} 項商品庫存不足，確認後將自動建立生產單：
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--radius-sm);
+        margin-bottom:14px;overflow:hidden;">
+        ${rows}
+      </div>
+      <div class="modal-actions">
+        <button class="modal-ok-btn" style="background:var(--amber);"
+          onclick="_doConfirmWithProduction()">
+          <i class="ti ti-player-play"></i> 確認並建立生產單
+        </button>
+        <button class="modal-cancel-btn"
+          onclick="document.getElementById('confirmProdModal').remove()">
+          取消
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  // 暫存待確認的缺料清單
+  modal._needProduction = needProduction;
+}
+
+function _doConfirmWithProduction(){
+  const modal = document.getElementById('confirmProdModal');
+  if(!modal) return;
+  const needProduction = modal._needProduction || [];
+  modal.remove();
+
+  // ④ 確認後只存一次，設最終狀態
+  _currentOrder.status = 'producing';
+  upsertOrder();
+  if(typeof newProductionFromOrder === 'function'){
+    newProductionFromOrder(_currentOrder, needProduction);
+  }
+  showToast(`🏭 已建立生產單（${needProduction.length} 項不足），訂單進入生產中`);
   showOrderDetail(_currentOrder.id);
 }
 
