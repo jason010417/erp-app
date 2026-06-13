@@ -104,21 +104,41 @@ function renderPurchaseReport(){
     <div class="report-stat"><div class="rs-num">${list.length}</div><div class="rs-label">筆進貨</div></div>
     <div class="report-stat"><div class="rs-num" style="color:var(--green);">${fmtMoney(totalCost)}</div><div class="rs-label">進貨金額</div></div>`;
 
+  const unpaidTotal = list
+    .filter(p => (p.status==='ordered'||p.status==='received'||p.status==='completed') && p.payStatus!=='paid')
+    .reduce((s,p)=>s+(p.totalCost||0),0);
+  const unpaidEl = document.getElementById('pr-unpaid-stat');
+  if(unpaidEl) unpaidEl.innerHTML = unpaidTotal
+    ? `<div class="report-stat"><div class="rs-num" style="color:var(--red);">${fmtMoney(unpaidTotal)}</div><div class="rs-label">未付款金額</div></div>`
+    : '';
+
   document.getElementById('pr-list').innerHTML = list.length
     ? list.slice().reverse().map(pu => {
-        const sup = SUPPLIERS.find(s=>s.id===pu.supplierId);
-        return `<div class="list-card" style="margin-bottom:8px;">
+        const sup     = SUPPLIERS.find(s=>s.id===pu.supplierId);
+        const showPay = pu.status==='ordered'||pu.status==='received'||pu.status==='completed';
+        const payBadge= showPay
+          ? (pu.payStatus==='paid'
+              ? `<span class="status-badge pay-badge-paid">已付款</span>`
+              : `<span class="status-badge pay-badge-unpaid">未付款</span>`)
+          : '';
+        const statusMap = { draft:'草稿', ordered:'待收貨', received:'已入庫', completed:'已入庫', cancelled:'已取消' };
+        return `<div class="list-card" style="margin-bottom:8px;cursor:pointer;"
+          onclick="showPurchaseDetail&&showPurchaseDetail('${pu.id}')">
           <div class="list-card-top">
             <span class="list-card-no">${pu.no}</span>
-            <span style="font-size:12px;color:var(--text3);">${fmtDate(pu.createdAt)}</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span style="font-size:11px;color:var(--text3);">${statusMap[pu.status]||''}</span>
+              ${payBadge}
+            </div>
           </div>
           <div class="list-card-meta">
             ${sup?`<span><i class="ti ti-building-store"></i>${sup.name}</span>`:''}
             <span><i class="ti ti-package"></i>${pu.items.length} 種</span>
+            <span><i class="ti ti-calendar"></i>${fmtDate(pu.createdAt)}</span>
           </div>
           <div class="list-card-footer">
             <span>${pu.items.slice(0,2).map(i=>i.name).join('、')}</span>
-            <span style="font-weight:700;">${fmtMoney(pu.totalCost)}</span>
+            <span style="font-weight:700;">${fmtMoney(pu.totalCost||0)}</span>
           </div>
         </div>`;
       }).join('')
@@ -149,6 +169,7 @@ function initPurchaseReportPage(){
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;" id="pr-stats"></div>
+    <div id="pr-unpaid-stat" style="margin-bottom:8px;"></div>
     <div id="pr-list"></div>`;
   renderPurchaseReport();
 }

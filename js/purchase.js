@@ -1,5 +1,5 @@
 // ============================================================
-// purchase.js — 進貨單管理
+// purchase.js — 採購單管理（草稿 → 已下單 → 已入庫）
 // ============================================================
 
 let purchases = JSON.parse(localStorage.getItem('erp_purchases') || '[]');
@@ -10,82 +10,495 @@ function savePurchases(){
 }
 
 function genPurchaseNo(){ return genNo('PU', purchases, 'no'); }
+function getPurchase(id){ return purchases.find(p => p.id === id) || null; }
 
-// ── 目前進貨單（工作中）──
-let _currentPurchase = {
-  supplierId:  null,
-  locationId:  getMainLocation?.()?.id || 'store_A',
-  items:       [],
+// ── 狀態設定 ──
+const PURCHASE_STATUS = {
+  draft:     { label:'草稿',   cls:'badge-draft',    icon:'ti-pencil' },
+  ordered:   { label:'待收貨', cls:'badge-pending',  icon:'ti-clock' },
+  received:  { label:'已入庫', cls:'badge-done',     icon:'ti-circle-check' },
+  completed: { label:'已入庫', cls:'badge-done',     icon:'ti-circle-check' }, // 舊資料相容
+  cancelled: { label:'已取消', cls:'badge-archived', icon:'ti-ban' },
 };
 
-// ── 初始化進貨頁面 ──
+const PURCHASE_PAY_STATUS = {
+  unpaid: { label:'未付款', cls:'pay-badge-unpaid' },
+  paid:   { label:'已付款', cls:'pay-badge-paid' },
+};
+
+function puStatusBadge(status){
+  const s = PURCHASE_STATUS[status] || PURCHASE_STATUS.draft;
+  return `<span class="status-badge ${s.cls}"><i class="ti ${s.icon}"></i> ${s.label}</span>`;
+}
+
+function puPayBadge(payStatus){
+  const s = PURCHASE_PAY_STATUS[payStatus] || PURCHASE_PAY_STATUS.unpaid;
+  return `<span class="status-badge ${s.cls}">${s.label}</span>`;
+}
+
+// ── 列表 ──
+let _puFilter = 'all';
+
 function initPurchasePage(){
   const el = document.getElementById('purchase-content');
   if(!el) return;
   el.innerHTML = `
-    <!-- 廠商選擇 -->
-    <div class="form-section-title">廠商</div>
-    <button class="customer-select-btn" onclick="openSupplierPicker()">
-      <i class="ti ti-building-store"></i>
-      <span id="purchase-supplier-name">選擇廠商</span>
-      <i class="ti ti-chevron-right" style="margin-left:auto;"></i>
-    </button>
-    <div id="purchase-supplier-info" style="display:none;" class="customer-info-box"></div>
-
-    <!-- 入庫地點 -->
-    <div class="cust-field" style="margin-top:12px;">
-      <label>入庫地點</label>
-      <select id="purchase-location" onchange="_currentPurchase.locationId=this.value">
-        ${getStoreLocations().map(loc =>
-          `<option value="${loc.id}" ${loc.isMain?'selected':''}>${loc.name}</option>`
-        ).join('')}
-      </select>
+    <div class="filter-tabs" style="margin:-4px -4px 10px;">
+      <button class="ftab active" onclick="renderPurchaseList('all')">全部</button>
+      <button class="ftab" onclick="renderPurchaseList('draft')">草稿</button>
+      <button class="ftab" onclick="renderPurchaseList('ordered')">待收貨</button>
+      <button class="ftab" onclick="renderPurchaseList('received')">已入庫</button>
+      <button class="ftab" onclick="renderPurchaseList('unpaid')">未付款</button>
     </div>
-
-    <!-- 商品搜尋 -->
-    <div class="form-section-title" style="margin-top:10px;">進貨品項</div>
-    <div class="search-bar">
-      <i class="ti ti-search"></i>
-      <input type="search" id="purchase-search"
-        placeholder="搜尋可進貨品項（原料、包材等）..."
-        oninput="searchItemsFor('purchase',this.value)" />
-    </div>
-    <div id="purchase-search-result" style="display:none;"></div>
-
-    <div class="order-list-header">
-      <span class="order-list-title">進貨清單</span>
-      <span class="order-count" id="purchase-count">0 項</span>
-    </div>
-    <div class="order-list" id="purchase-list">
-      <div class="order-empty">請搜尋商品加入進貨清單</div>
-    </div>
-
-    <!-- 備註 -->
-    <div class="cust-field" style="margin-top:10px;">
-      <label>備註</label>
-      <input type="text" id="purchase-remark" placeholder="進貨備註..." />
-    </div>
-
-    <!-- 確認 -->
+    <div id="purchase-list-container"></div>
     <button class="confirm-btn" style="background:var(--green);margin-top:8px;"
-      onclick="confirmPurchase()">
-      <i class="ti ti-check"></i> 確認進貨
-    </button>
-
-    <!-- 進貨歷史 -->
-    <div class="section-title" style="margin-top:20px;"><i class="ti ti-history"></i> 最近進貨記錄</div>
-    <div id="purchase-history"></div>`;
-
-  _currentPurchase = {
-    supplierId: null,
-    locationId: getMainLocation?.()?.id || 'store_A',
-    items:      [],
-  };
-  renderPurchaseList();
-  renderPurchaseHistory();
+      onclick="newPurchase()">
+      <i class="ti ti-plus"></i> 新增採購單
+    </button>`;
+  renderPurchaseList('all');
 }
 
-// ── 廠商選擇 ──
+function renderPurchaseList(filter){
+  _puFilter = filter || 'all';
+  const tabs    = document.querySelectorAll('#purchase-content .ftab');
+  const filters = ['all','draft','ordered','received','unpaid'];
+  tabs.forEach((btn, i) => btn.classList.toggle('active', filters[i] === _puFilter));
+
+  const el = document.getElementById('purchase-list-container');
+  if(!el) return;
+
+  let list = [...purchases].reverse();
+  if(_puFilter === 'unpaid'){
+    list = list.filter(p =>
+      (p.status === 'ordered' || p.status === 'received' || p.status === 'completed')
+      && p.payStatus !== 'paid'
+    );
+  } else if(_puFilter === 'received'){
+    list = list.filter(p => p.status === 'received' || p.status === 'completed');
+  } else if(_puFilter !== 'all'){
+    list = list.filter(p => p.status === _puFilter);
+  }
+
+  if(!list.length){
+    el.innerHTML = '<div class="order-empty">沒有符合的採購單</div>';
+    return;
+  }
+
+  el.innerHTML = list.map(pu => {
+    const sup      = SUPPLIERS.find(s => s.id === pu.supplierId);
+    const itemsStr = (pu.items||[]).slice(0,2).map(i=>i.name).join('、')
+      + ((pu.items||[]).length > 2 ? ` 等${pu.items.length}項` : '');
+    const showPay  = pu.status === 'ordered' || pu.status === 'received' || pu.status === 'completed';
+    return `<div class="list-card" onclick="showPurchaseDetail('${pu.id}')">
+      <div class="list-card-top">
+        <span class="list-card-no">${pu.no}</span>
+        <div style="display:flex;gap:6px;">
+          ${puStatusBadge(pu.status)}
+          ${showPay ? puPayBadge(pu.payStatus) : ''}
+        </div>
+      </div>
+      <div class="list-card-meta">
+        ${sup ? `<span><i class="ti ti-building-store"></i>${sup.name}</span>` : ''}
+        <span><i class="ti ti-calendar"></i>${fmtDate(pu.createdAt)}</span>
+        ${pu.expectedDate ? `<span><i class="ti ti-clock"></i>預計 ${fmtDate(pu.expectedDate)}</span>` : ''}
+      </div>
+      <div class="list-card-items">${itemsStr || '無品項'}</div>
+      <div class="list-card-footer">
+        <span class="list-card-amount">${fmtMoney(pu.totalCost||0)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 新增採購單 ──
+let _currentPurchase = null;
+
+function newPurchase(){
+  _currentPurchase = {
+    id:           null,
+    no:           genPurchaseNo(),
+    supplierId:   null,
+    locationId:   getMainLocation?.()?.id || 'store_A',
+    items:        [],
+    totalCost:    0,
+    remark:       '',
+    status:       'draft',
+    payStatus:    'unpaid',
+    expectedDate: '',
+    orderedAt:    '',
+    receivedAt:   '',
+    createdAt:    todayStr(),
+    updatedAt:    todayStr(),
+  };
+  renderPurchaseEditPage();
+  showPage('purchase-edit');
+}
+
+function showPurchaseDetail(id){
+  const pu = getPurchase(id);
+  if(!pu) return;
+  _currentPurchase = JSON.parse(JSON.stringify(pu));
+  renderPurchaseEditPage();
+  showPage('purchase-edit');
+}
+
+// ── 編輯頁 ──
+function renderPurchaseEditPage(){
+  const page = document.getElementById('page-purchase-edit');
+  if(!page) return;
+  const pu         = _currentPurchase;
+  const sup        = SUPPLIERS.find(s => s.id === pu.supplierId);
+  const isReceived = pu.status === 'received' || pu.status === 'completed';
+  const isOrdered  = pu.status === 'ordered';
+  const isDraft    = pu.status === 'draft' || !pu.status;
+  const isEditable = isDraft;  // 下單後鎖定品項與廠商
+
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('purchase')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title">${pu.id ? pu.no : '新增採購單'}</div>
+      ${isEditable
+        ? `<button class="small-btn green-btn" onclick="savePurchaseDraft()">
+             <i class="ti ti-device-floppy"></i> 儲存
+           </button>`
+        : '<span></span>'}
+    </div>
+
+    <div class="form-card">
+      <div class="form-meta-row">
+        <span class="form-no">${pu.no}</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${puStatusBadge(pu.status)}
+          ${!isDraft ? puPayBadge(pu.payStatus) : ''}
+        </div>
+      </div>
+
+      <!-- 廠商 -->
+      <div class="form-section-title">廠商</div>
+      <button class="customer-select-btn" ${!isEditable ? 'disabled' : ''}
+        onclick="openSupplierPicker()">
+        <i class="ti ti-building-store"></i>
+        <span id="pu-supplier-name">${sup ? sup.name : '選擇廠商'}</span>
+        <i class="ti ti-chevron-right" style="margin-left:auto;"></i>
+      </button>
+      ${sup ? `<div id="pu-supplier-info" class="customer-info-box" style="margin-top:6px;">
+        ${_getSupplierInfoLines(pu.supplierId)}
+      </div>` : ''}
+
+      <!-- 入庫地點 -->
+      <div class="cust-field" style="margin-top:12px;">
+        <label>入庫地點</label>
+        <select id="pu-location" ${!isEditable && !isOrdered ? 'disabled' : ''}
+          onchange="_currentPurchase.locationId=this.value">
+          ${getStoreLocations().map(loc =>
+            `<option value="${loc.id}" ${pu.locationId===loc.id?'selected':''}>${loc.name}</option>`
+          ).join('')}
+        </select>
+      </div>
+
+      <!-- 品項 -->
+      <div class="form-section-title" style="margin-top:10px;">進貨品項</div>
+      ${isEditable ? `
+      <div class="search-bar">
+        <i class="ti ti-search"></i>
+        <input type="search" id="purchase-search"
+          placeholder="搜尋可進貨品項（原料、包材等）..."
+          oninput="searchItemsFor('purchase',this.value)" />
+      </div>
+      <div id="purchase-search-result" style="display:none;"></div>` : ''}
+      <div class="order-list-header">
+        <span class="order-list-title">進貨清單</span>
+        <span class="order-count" id="pu-item-count">${pu.items.length} 項</span>
+      </div>
+      <div class="order-list" id="pu-item-list"></div>
+
+      <!-- 採購總金額 -->
+      <div class="amount-section" style="margin-top:12px;">
+        <div class="amount-row grand">
+          <span>採購總金額</span>
+          <strong id="pu-total">${fmtMoney(pu.totalCost||0)}</strong>
+        </div>
+      </div>
+
+      <!-- 預計到貨日 -->
+      <div class="cust-field" style="margin-top:10px;">
+        <label>預計到貨日</label>
+        <input type="date" id="pu-expected-date" value="${pu.expectedDate||''}"
+          ${isReceived ? 'disabled' : ''} />
+      </div>
+
+      <!-- 備註 -->
+      <div class="cust-field">
+        <label>備註</label>
+        <textarea id="pu-remark" rows="2"
+          ${isReceived ? 'disabled' : ''}>${pu.remark||''}</textarea>
+      </div>
+
+      <!-- 付款狀態（下單後才顯示）-->
+      ${!isDraft ? `
+      <div class="form-section-title" style="margin-top:14px;">付款</div>
+      <div class="amount-section">
+        <div class="amount-row">
+          <span>付款狀態</span>
+          <div style="display:flex;gap:6px;">
+            <button class="pay-status-btn ${pu.payStatus!=='paid'?'active':''}"
+              id="pu-pay-unpaid" onclick="setPuPayStatus('unpaid')">未付款</button>
+            <button class="pay-status-btn ${pu.payStatus==='paid'?'active':''}"
+              id="pu-pay-paid" onclick="setPuPayStatus('paid')">已付款</button>
+          </div>
+        </div>
+      </div>` : ''}
+    </div>
+
+    <!-- 進度時間軸 -->
+    ${pu.id ? _renderPurchaseTimeline(pu) : ''}
+
+    <!-- 操作按鈕 -->
+    ${isDraft ? `
+    <button class="confirm-btn" style="background:var(--green);margin-top:8px;"
+      onclick="submitPurchaseOrder()">
+      <i class="ti ti-send"></i> 送出採購單（向廠商下單）
+    </button>` : ''}
+    ${isOrdered ? `
+    <button class="confirm-btn" style="background:var(--purple);margin-top:8px;"
+      onclick="receivePurchaseStock()">
+      <i class="ti ti-package-import"></i> 確認到貨入庫
+    </button>` : ''}
+    ${(isOrdered || isDraft) ? `
+    <button class="redit-btn"
+      style="margin-top:8px;color:var(--red);border-color:var(--red);"
+      onclick="cancelPurchase('${pu.id||''}')">
+      <i class="ti ti-ban"></i> 取消採購單
+    </button>` : ''}`;
+
+  renderPuItems();
+}
+
+function _getSupplierInfoLines(id){
+  if(!id) return '無聯絡資料';
+  const extra = JSON.parse(localStorage.getItem('erp_sup_' + id) || '{}');
+  return [
+    extra.contact ? `👤 ${extra.contact}` : '',
+    extra.tel     ? `📞 ${extra.tel}`     : '',
+    extra.email   ? `✉️ ${extra.email}`   : '',
+  ].filter(Boolean).join('<br>') || '無聯絡資料';
+}
+
+function _renderPurchaseTimeline(pu){
+  const steps = [
+    { label:'建立草稿',   time: pu.createdAt,  done: true },
+    { label:'送出採購單', time: pu.orderedAt,   done: !!pu.orderedAt },
+    { label:'到貨入庫',   time: pu.receivedAt,  done: !!pu.receivedAt
+        || pu.status==='completed' },
+  ];
+  const rows = steps.map((s, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;
+      ${i<steps.length-1?'border-bottom:1px solid var(--border);':''}">
+      <div style="width:10px;height:10px;border-radius:50%;flex-shrink:0;
+        background:${s.done?'var(--green)':'var(--border)'};"></div>
+      <span style="font-size:13px;color:${s.done?'var(--text)':'var(--text3)'};">
+        ${s.label}
+      </span>
+      <span style="font-size:12px;color:var(--text3);margin-left:auto;">
+        ${s.time ? fmtDate(s.time) : '—'}
+      </span>
+    </div>`).join('');
+  return `<div class="form-card" style="margin-top:8px;">
+    <div class="form-section-title">進度</div>
+    ${rows}
+  </div>`;
+}
+
+// ── 品項管理 ──
+function addPurchaseItem(productId){
+  const item = getItem(productId);
+  if(!item || !_currentPurchase) return;
+  const existing = _currentPurchase.items.find(i => i.id === productId);
+  if(existing){ existing.qty++; }
+  else {
+    _currentPurchase.items.push({
+      id:       productId,
+      name:     item.name,
+      emoji:    item.emoji,
+      qty:      1,
+      unitCost: item.costPrice || 0,
+    });
+  }
+  renderPuItems();
+  calcPuTotal();
+}
+
+function removePurchaseItem(idx){
+  if(!_currentPurchase) return;
+  _currentPurchase.items.splice(idx, 1);
+  renderPuItems();
+  calcPuTotal();
+}
+
+function changePurchaseQty(idx, delta){
+  const item = _currentPurchase?.items[idx];
+  if(item) item.qty = Math.max(1, item.qty + delta);
+  renderPuItems();
+  calcPuTotal();
+}
+
+function changePurchaseCost(idx, val){
+  const item = _currentPurchase?.items[idx];
+  if(item){ item.unitCost = parseInt(val) || 0; calcPuTotal(); }
+}
+
+function renderPuItems(){
+  const el    = document.getElementById('pu-item-list');
+  const count = document.getElementById('pu-item-count');
+  if(!el || !_currentPurchase) return;
+  const items      = _currentPurchase.items;
+  const isEditable = _currentPurchase.status === 'draft' || !_currentPurchase.status;
+  if(count) count.textContent = items.length + ' 項';
+  if(!items.length){
+    el.innerHTML = '<div class="order-empty">請搜尋商品加入進貨清單</div>';
+    return;
+  }
+  el.innerHTML = items.map((item, idx) => `
+    <div class="order-row">
+      <div class="order-emoji">${item.emoji}</div>
+      <div class="order-info">
+        <div class="order-name">${item.name}</div>
+        <div class="order-id" style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12px;">進貨價</span>
+          ${isEditable
+            ? `<input type="number" class="unit-price-input" value="${item.unitCost}" min="0"
+                 onchange="changePurchaseCost(${idx},this.value)" onclick="this.select()" />`
+            : `<span style="font-weight:700;">$${item.unitCost}</span>`}
+        </div>
+      </div>
+      <div class="qty-ctrl">
+        ${isEditable
+          ? `<button class="qty-btn" onclick="changePurchaseQty(${idx},-1)">−</button>
+             <span class="qty-num">${item.qty}</span>
+             <button class="qty-btn" onclick="changePurchaseQty(${idx},1)">＋</button>`
+          : `<span class="qty-num">${item.qty}</span>`}
+      </div>
+      ${isEditable
+        ? `<button class="order-del" onclick="removePurchaseItem(${idx})">
+             <i class="ti ti-x"></i>
+           </button>`
+        : ''}
+    </div>`).join('');
+}
+
+function calcPuTotal(){
+  if(!_currentPurchase) return;
+  const total = _currentPurchase.items.reduce((s,i) => s + (i.unitCost||0) * i.qty, 0);
+  _currentPurchase.totalCost = total;
+  const el = document.getElementById('pu-total');
+  if(el) el.textContent = fmtMoney(total);
+}
+
+// ── 收集表單 ──
+function collectPurchaseForm(){
+  if(!_currentPurchase) return;
+  _currentPurchase.expectedDate = document.getElementById('pu-expected-date')?.value || '';
+  _currentPurchase.remark       = document.getElementById('pu-remark')?.value.trim() || '';
+  _currentPurchase.locationId   = document.getElementById('pu-location')?.value
+                                 || _currentPurchase.locationId;
+  _currentPurchase.updatedAt    = todayStr();
+  calcPuTotal();
+}
+
+// ── upsert ──
+function upsertPurchase(){
+  if(!_currentPurchase.id) _currentPurchase.id = 'PU' + Date.now();
+  const idx  = purchases.findIndex(p => p.id === _currentPurchase.id);
+  const copy = JSON.parse(JSON.stringify(_currentPurchase));
+  if(idx >= 0) purchases[idx] = copy;
+  else         purchases.push(copy);
+  savePurchases();
+}
+
+// ── 儲存草稿 ──
+function savePurchaseDraft(){
+  if(!_currentPurchase.items.length){ showToast('⚠️ 請先加入品項'); return; }
+  collectPurchaseForm();
+  upsertPurchase();
+  renderPurchaseList(_puFilter);
+  showToast('📝 採購單已儲存：' + _currentPurchase.no);
+}
+
+// ── 送出採購單（草稿 → 已下單，不入庫）──
+function submitPurchaseOrder(){
+  if(!_currentPurchase.supplierId){ showToast('⚠️ 請先選擇廠商'); return; }
+  if(!_currentPurchase.items.length){ showToast('⚠️ 請先加入品項'); return; }
+  collectPurchaseForm();
+  _currentPurchase.status    = 'ordered';
+  _currentPurchase.orderedAt = todayStr();
+  upsertPurchase();
+  renderPurchaseList(_puFilter);
+  renderPurchaseEditPage();
+  showToast('✅ 採購單已下單，等待到貨：' + _currentPurchase.no);
+}
+
+// ── 確認到貨入庫（已下單 → 已入庫，此時才異動庫存）──
+function receivePurchaseStock(){
+  if(!_currentPurchase) return;
+  const pu    = _currentPurchase;
+  collectPurchaseForm();
+  const locId = pu.locationId || getMainLocation()?.id || 'store_A';
+  const loc   = getStoreLocations().find(l => l.id === locId);
+  const lines = pu.items.map(i => `・${i.emoji} ${i.name} × ${i.qty}`).join('\n');
+  if(!confirm(`確認以下商品到貨，入庫至「${loc?.name||locId}」？\n\n${lines}`)) return;
+
+  pu.status     = 'received';
+  pu.receivedAt = nowStr();
+
+  adjustStockBatch(
+    pu.items.map(i => ({ productId: i.id, qty: i.qty })),
+    locId,
+    'in',
+    { op:'purchase', refId: pu.id, refType:'purchase', note:`採購單入庫 ${pu.no}` }
+  );
+
+  upsertPurchase();
+  renderPurchaseList(_puFilter);
+  renderPurchaseEditPage();
+  showToast(`📦 ${pu.items.length} 種商品已入庫：${pu.no}`);
+}
+
+// ── 付款狀態 ──
+function setPuPayStatus(status){
+  if(!_currentPurchase) return;
+  _currentPurchase.payStatus = status;
+  _currentPurchase.updatedAt = todayStr();
+  ['unpaid','paid'].forEach(s =>
+    document.getElementById(`pu-pay-${s}`)?.classList.toggle('active', s === status));
+  upsertPurchase();
+  renderPurchaseList(_puFilter);
+  showToast(status === 'paid' ? '✅ 已標記付款' : '已更新為未付款');
+}
+
+// ── 取消採購單 ──
+function cancelPurchase(id){
+  const pu = (id && id !== 'null') ? getPurchase(id) : _currentPurchase;
+  if(!pu) return;
+  if(pu.status === 'received' || pu.status === 'completed'){
+    showToast('⚠️ 已入庫的採購單無法取消'); return;
+  }
+  if(!confirm(`確定取消採購單 ${pu.no}？`)) return;
+
+  if(!pu.id){
+    // 尚未存過的草稿，直接離開
+    showPage('purchase'); return;
+  }
+  pu.status    = 'cancelled';
+  pu.updatedAt = todayStr();
+  const idx = purchases.findIndex(p => p.id === pu.id);
+  if(idx >= 0) purchases[idx] = pu;
+  savePurchases();
+  renderPurchaseList(_puFilter);
+  showToast('❌ 採購單已取消：' + pu.no);
+  showPage('purchase');
+}
+
+// ── 廠商選擇 Modal ──
 let _supplierPickerActive = false;
 
 function openSupplierPicker(){
@@ -96,7 +509,7 @@ function openSupplierPicker(){
 }
 
 function renderSupplierPickerList(q){
-  const el   = document.getElementById('supplier-picker-list');
+  const el = document.getElementById('supplier-picker-list');
   if(!el) return;
   const list = q
     ? SUPPLIERS.filter(s => s.name.includes(q) || s.id.includes(q))
@@ -109,170 +522,32 @@ function renderSupplierPickerList(q){
         <div class="catdetail-id">${s.id}${extra.tel?' ・ '+extra.tel:''}</div>
       </div>
     </div>`;
-  }).join('') || `<div class="order-empty">找不到廠商</div>`;
+  }).join('') || '<div class="order-empty">找不到廠商</div>';
 }
 
 function pickSupplier(id){
-  const s     = SUPPLIERS.find(sup => sup.id === id);
+  const s = SUPPLIERS.find(sup => sup.id === id);
   if(!s) return;
-  _currentPurchase.supplierId = id;
-  const el    = document.getElementById('purchase-supplier-name');
-  if(el) el.textContent = s.name;
+  if(_currentPurchase) _currentPurchase.supplierId = id;
 
-  const extra = JSON.parse(localStorage.getItem('erp_sup_' + id) || '{}');
-  const info  = document.getElementById('purchase-supplier-info');
-  if(info){
-    const lines = [
-      extra.contact ? `👤 ${extra.contact}` : '',
-      extra.tel     ? `📞 ${extra.tel}`     : '',
-      extra.email   ? `✉️ ${extra.email}`   : '',
-    ].filter(Boolean);
-    info.innerHTML  = lines.join('<br>') || '無聯絡資料';
-    info.style.display = 'block';
+  const nameEl = document.getElementById('pu-supplier-name');
+  if(nameEl) nameEl.textContent = s.name;
+
+  const infoEl = document.getElementById('pu-supplier-info');
+  if(infoEl){
+    infoEl.innerHTML     = _getSupplierInfoLines(id);
+    infoEl.style.display = 'block';
+  } else {
+    renderPurchaseEditPage();
   }
-  const modal = document.getElementById('supplierPickerModal');
-  if(modal) modal.style.display = 'none';
+  document.getElementById('supplierPickerModal').style.display = 'none';
 }
 
-// ── 品項管理 ──
-function addPurchaseItem(productId){
-  const item = getItem(productId);
-  if(!item) return;
-  const existing = _currentPurchase.items.find(i => i.id === productId);
-  if(existing){ existing.qty++; }
-  else {
-    _currentPurchase.items.push({
-      id:        productId,
-      name:      item.name,
-      emoji:     item.emoji,
-      qty:       1,
-      unitCost:  item.costPrice || 0,
-    });
-  }
-  renderPurchaseList();
-}
-
-function removePurchaseItem(idx){
-  _currentPurchase.items.splice(idx, 1);
-  renderPurchaseList();
-}
-
-function changePurchaseQty(idx, delta){
-  const item = _currentPurchase.items[idx];
-  if(item) item.qty = Math.max(1, item.qty + delta);
-  renderPurchaseList();
-}
-
-function changePurchaseCost(idx, val){
-  const item = _currentPurchase.items[idx];
-  if(item) item.unitCost = parseInt(val) || 0;
-}
-
-function renderPurchaseList(){
-  const el    = document.getElementById('purchase-list');
-  const count = document.getElementById('purchase-count');
-  if(!el) return;
-  const items = _currentPurchase.items;
-  if(count) count.textContent = items.length + ' 項';
-  if(!items.length){
-    el.innerHTML = `<div class="order-empty">請搜尋商品加入進貨清單</div>`; return;
-  }
-  el.innerHTML = items.map((item, idx) => `
-    <div class="order-row">
-      <div class="order-emoji">${item.emoji}</div>
-      <div class="order-info">
-        <div class="order-name">${item.name}</div>
-        <div class="order-id" style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:12px;">進貨價</span>
-          <input type="number" class="unit-price-input"
-            value="${item.unitCost}" min="0"
-            onchange="changePurchaseCost(${idx},this.value)"
-            onclick="this.select()" />
-        </div>
-      </div>
-      <div class="qty-ctrl">
-        <button class="qty-btn" onclick="changePurchaseQty(${idx},-1)">−</button>
-        <span class="qty-num">${item.qty}</span>
-        <button class="qty-btn" onclick="changePurchaseQty(${idx},1)">＋</button>
-      </div>
-      <button class="order-del" onclick="removePurchaseItem(${idx})">
-        <i class="ti ti-x"></i>
-      </button>
-    </div>`).join('');
-}
-
-// ── 確認進貨 ──
-function confirmPurchase(){
-  if(!_currentPurchase.items.length){ showToast('⚠️ 請先加入品項'); return; }
-  const locId  = _currentPurchase.locationId || getMainLocation()?.id || 'store_A';
-  const now    = nowStr();
-  const remark = document.getElementById('purchase-remark')?.value.trim() || '';
-  const total  = _currentPurchase.items.reduce((s,i)=>s+i.unitCost*i.qty, 0);
-
-  // 存進貨單
-  const pu = {
-    id:         'PU' + Date.now(),
-    no:         genPurchaseNo(),
-    supplierId: _currentPurchase.supplierId,
-    locationId: locId,
-    items:      JSON.parse(JSON.stringify(_currentPurchase.items)),
-    totalCost:  total,
-    remark,
-    status:     'completed',
-    createdAt:  todayStr(),
-  };
-  purchases.push(pu);
-  savePurchases();
-
-  // 更新庫存
-  adjustStockBatch(
-    _currentPurchase.items.map(i => ({ productId: i.id, qty: i.qty })),
-    locId,
-    'in',
-    { op:'purchase', refId:pu.id, refType:'purchase', note:`進貨單 ${pu.no}` }
-  );
-
-  const sup = SUPPLIERS.find(s => s.id === _currentPurchase.supplierId);
-  showToast(`✅ 進貨完成！${_currentPurchase.items.length} 種商品已入庫`);
-
-  // 重設
-  _currentPurchase = {
-    supplierId: null,
-    locationId: locId,
-    items:      [],
-  };
-  initPurchasePage();
-}
-
-// ── 進貨記錄 ──
-function renderPurchaseHistory(){
-  const el = document.getElementById('purchase-history');
-  if(!el) return;
-  const recent = purchases.slice().reverse().slice(0, 10);
-  if(!recent.length){
-    el.innerHTML = `<div class="order-empty">尚無進貨記錄</div>`; return;
-  }
-  el.innerHTML = recent.map(pu => {
-    const sup = SUPPLIERS.find(s => s.id === pu.supplierId);
-    return `<div class="list-card" style="margin-bottom:8px;">
-      <div class="list-card-top">
-        <span class="list-card-no">${pu.no}</span>
-        <span style="font-size:12px;color:var(--text3);">${fmtDate(pu.createdAt)}</span>
-      </div>
-      <div class="list-card-meta">
-        ${sup ? `<span><i class="ti ti-building-store"></i>${sup.name}</span>` : ''}
-        <span><i class="ti ti-package"></i>${pu.items.length} 種商品</span>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── 廠商選擇 Modal（動態建立）──
 function initSupplierPickerModal(){
   if(document.getElementById('supplierPickerModal')) return;
   const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.id        = 'supplierPickerModal';
+  modal.className     = 'modal-overlay';
+  modal.id            = 'supplierPickerModal';
   modal.style.display = 'none';
   modal.onclick = e => { if(e.target === modal) modal.style.display = 'none'; };
   modal.innerHTML = `
@@ -292,7 +567,11 @@ function initSupplierPickerModal(){
   document.body.appendChild(modal);
 }
 
-// 初始化
+// ── 舊版相容（report.js 呼叫）──
+function renderPurchaseHistory(){}
+function confirmPurchase(){ showToast('請使用新版採購單流程'); }
+
+// ── 初始化 ──
 document.addEventListener('DOMContentLoaded', () => {
   initSupplierPickerModal();
 });
