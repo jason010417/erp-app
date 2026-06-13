@@ -470,8 +470,9 @@ function renderOrderItems(){
   const el    = document.getElementById('ord-item-list');
   const count = document.getElementById('ord-item-count');
   if(!el || !_currentOrder) return;
-  const items    = _currentOrder.items;
-  const isLocked = _currentOrder.status === 'archived';
+  const items        = _currentOrder.items;
+  const isLocked     = _currentOrder.status === 'archived' && !isManager();
+  const isItemLocked = _currentOrder.status !== 'pending' && !isAdmin();
   if(count) count.textContent = items.length + ' 項';
   if(!items.length){
     el.innerHTML = `<div class="order-empty">尚未加入品項</div>`;
