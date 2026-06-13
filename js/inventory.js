@@ -131,7 +131,7 @@ function renderInventorySummary(){
     const total = getTotalStock(item.id);
     return `<div class="inv-warn-row" onclick="showPage('inventory-detail');selectProduct('${item.id}')">
       <span>${item.emoji} ${item.name}</span>
-      <span class="inv-qty ${total <= 0 ? 'empty' : 'low'}">${total} ${item.unit}</span>
+      <span class="inv-qty ${total <= 0 ? 'empty' : 'low'}">${total}</span>
     </div>`;
   }).join('') + (low.length > 5 ? `<div class="inv-more">還有 ${low.length-5} 項偏低...</div>` : '');
 }

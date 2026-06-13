@@ -445,16 +445,59 @@ function initImportPage(){
         <div class="admin-item-sub">所有銷售明細</div>
       </button>
     </div>
-    <div class="section-title"><i class="ti ti-upload"></i> 匯入客戶資料</div>
-    <div class="form-card">
+    <div class="section-title" style="margin-top:14px;"><i class="ti ti-upload"></i> 匯入資料</div>
+    <div class="filter-tabs" style="margin-bottom:12px;" id="import-type-tabs">
+      <button class="ftab active" onclick="switchImportTab('inventory',this)">庫存盤點</button>
+      <button class="ftab" onclick="switchImportTab('prices',this)">商品售價</button>
+      <button class="ftab" onclick="switchImportTab('customers',this)">客戶</button>
+      <button class="ftab" onclick="switchImportTab('suppliers',this)">廠商</button>
+    </div>
+
+    <!-- 庫存盤點 -->
+    <div id="import-panel-inventory" class="import-panel form-card">
       <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">
-        CSV 格式：客戶名稱,聯絡人,電話,Email,地址
+        CSV 格式（與下載庫存現況相同）：<br>
+        <code>商品編號, 品名, 單位, [地點1數量], [地點2數量], 合計</code><br>
+        ※ 直接下載「庫存現況」→ 在 Excel 修改數量 → 重新上傳即可
       </div>
-      <input type="file" id="import-customer-file" accept=".csv"
-        style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:8px;
-        font-size:13px;background:var(--bg);"
-        onchange="previewCustomerImport(this)" />
-      <div id="import-preview" style="margin-top:10px;"></div>
+      <input type="file" id="import-inventory-file" accept=".csv"
+        style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:8px;font-size:13px;background:var(--bg);"
+        onchange="previewImport('inventory',this)" />
+      <div id="import-preview-inventory" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- 商品售價/進貨價 -->
+    <div id="import-panel-prices" class="import-panel form-card" style="display:none;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">
+        CSV 格式：<code>商品編號, 售價, 進貨價, 安全庫存</code><br>
+        ※ 可只填商品編號+售價，其餘留空則保持原值
+      </div>
+      <input type="file" id="import-prices-file" accept=".csv"
+        style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:8px;font-size:13px;background:var(--bg);"
+        onchange="previewImport('prices',this)" />
+      <div id="import-preview-prices" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- 客戶 -->
+    <div id="import-panel-customers" class="import-panel form-card" style="display:none;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">
+        CSV 格式：<code>客戶名稱, 聯絡人, 電話, Email, 地址</code>
+      </div>
+      <input type="file" id="import-customers-file" accept=".csv"
+        style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:8px;font-size:13px;background:var(--bg);"
+        onchange="previewImport('customers',this)" />
+      <div id="import-preview-customers" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- 廠商 -->
+    <div id="import-panel-suppliers" class="import-panel form-card" style="display:none;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">
+        CSV 格式：<code>廠商編號, 廠商名稱, 聯絡人, 電話, Email</code>
+      </div>
+      <input type="file" id="import-suppliers-file" accept=".csv"
+        style="width:100%;padding:10px;border:1px dashed var(--border);border-radius:8px;font-size:13px;background:var(--bg);"
+        onchange="previewImport('suppliers',this)" />
+      <div id="import-preview-suppliers" style="margin-top:10px;"></div>
     </div>`;
 }
 
@@ -521,46 +564,139 @@ function exportCSV(type){
   showToast(filename + ' 已下載');
 }
 
-function previewCustomerImport(input){
+// ── 匯入 tab 切換 ──
+function switchImportTab(type, btn){
+  document.querySelectorAll('#import-type-tabs .ftab')
+    .forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.import-panel')
+    .forEach(p => p.style.display = p.id === 'import-panel-' + type ? '' : 'none');
+}
+
+// ── 通用預覽 ──
+function previewImport(type, input){
   const file = input.files[0];
   if(!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const lines   = e.target.result.split('\n').filter(l=>l.trim());
-    const preview = lines.slice(0,5).map(l => l.split(','));
-    const el      = document.getElementById('import-preview');
-    el.innerHTML  = `<div style="font-size:13px;color:var(--text2);margin-bottom:8px;">
+    // 移除 BOM 字符
+    let text  = e.target.result.replace(/^﻿/, '');
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    // 解析 CSV（支援引號欄位）
+    const parseCSVLine = l => {
+      const result = []; let cur = '', inQ = false;
+      for(let i = 0; i < l.length; i++){
+        if(l[i] === '"'){ inQ = !inQ; }
+        else if(l[i] === ',' && !inQ){ result.push(cur.trim()); cur = ''; }
+        else { cur += l[i]; }
+      }
+      result.push(cur.trim());
+      return result;
+    };
+    const rows = lines.map(parseCSVLine);
+    window['_importData_' + type] = rows;
+
+    const el = document.getElementById('import-preview-' + type);
+    const labels = { inventory:'庫存', prices:'商品售價', customers:'客戶', suppliers:'廠商' };
+    el.innerHTML = `<div style="font-size:13px;color:var(--text2);margin-bottom:8px;">
       預覽（共 ${lines.length} 筆）：</div>` +
-      preview.map(cols=>`<div style="padding:6px;border-bottom:1px solid var(--border);font-size:12px;">
-        ${cols.map(c=>`<span style="margin-right:8px;">${c.trim()}</span>`).join('')}
-      </div>`).join('') +
+      rows.slice(0,4).map(cols =>
+        `<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          ${cols.map(c=>`<span style="margin-right:8px;color:var(--text2);">${c||'—'}</span>`).join('')}
+        </div>`
+      ).join('') +
       `<button class="confirm-btn" style="margin-top:10px;"
-        onclick="doImportCustomers()">
-        確認匯入 ${lines.length} 筆客戶
+        onclick="doImport('${type}')">
+        確認匯入 ${lines.length} 筆${labels[type]||''}資料
       </button>`;
-    window._importCustomerData = lines;
   };
   reader.readAsText(file, 'utf-8');
 }
 
-function doImportCustomers(){
-  const lines = window._importCustomerData || [];
+// ── 執行匯入 ──
+function doImport(type){
+  const rows = window['_importData_' + type] || [];
   let count = 0;
-  lines.forEach(line => {
-    const cols = line.split(',').map(c => c.trim());
-    if(!cols[0] || cols[0]==='客戶名稱') return;
-    customers.push({
-      id:        'C' + Date.now() + Math.random().toString(36).slice(2,5),
-      name:      cols[0]||'', contact:cols[1]||'', tel:cols[2]||'',
-      email:     cols[3]||'', address:cols[4]||'',
-      source:    'phone', createdAt: todayStr(),
+
+  if(type === 'inventory'){
+    // 格式：商品編號, 品名, 單位, [loc1], [loc2], ..., 合計
+    // 第一列可能是 header，自動偵測
+    const locs = getStoreLocations();
+    rows.forEach(cols => {
+      const id = cols[0];
+      if(!id || id === '商品編號') return;
+      const item = getItem(id);
+      if(!item) return;
+      // 數值從第 3 欄（index 3）開始，與 export 欄位對應
+      locs.forEach((loc, i) => {
+        const val = parseInt(cols[3 + i]);
+        if(!isNaN(val)){
+          if(!inventory[id]) inventory[id] = {};
+          inventory[id][loc.id] = Math.max(0, val);
+          count++;
+        }
+      });
     });
-    count++;
-  });
-  if(typeof saveCustomers === 'function') saveCustomers();
-  showToast('已匯入 ' + count + ' 筆客戶');
+    saveInventory();
+    if(typeof pushToFirebase === 'function') pushToFirebase('inventory', inventory);
+    showToast(`✅ 已更新 ${count} 筆庫存`);
+
+  } else if(type === 'prices'){
+    // 格式：商品編號, 售價, 進貨價, 安全庫存
+    rows.forEach(cols => {
+      const id = cols[0];
+      if(!id || id === '商品編號') return;
+      const item = ITEM_INDEX[id];
+      if(!item) return;
+      if(cols[1] !== '' && cols[1] !== undefined) item.salePrice   = parseInt(cols[1]) || 0;
+      if(cols[2] !== '' && cols[2] !== undefined) item.costPrice   = parseInt(cols[2]) || 0;
+      if(cols[3] !== '' && cols[3] !== undefined) item.safetyStock = parseInt(cols[3]) || 0;
+      count++;
+    });
+    if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', buildProductOverrides());
+    showToast(`✅ 已更新 ${count} 筆商品售價`);
+
+  } else if(type === 'customers'){
+    // 格式：客戶名稱, 聯絡人, 電話, Email, 地址
+    rows.forEach(cols => {
+      if(!cols[0] || cols[0] === '客戶名稱') return;
+      customers.push({
+        id:        'C' + Date.now() + Math.random().toString(36).slice(2,5),
+        name:      cols[0]||'', contact: cols[1]||'', tel: cols[2]||'',
+        email:     cols[3]||'', address: cols[4]||'',
+        source:    'phone', createdAt: todayStr(),
+      });
+      count++;
+    });
+    if(typeof saveCustomers === 'function') saveCustomers();
+    showToast(`✅ 已匯入 ${count} 筆客戶`);
+
+  } else if(type === 'suppliers'){
+    // 格式：廠商編號, 廠商名稱, 聯絡人, 電話, Email
+    rows.forEach(cols => {
+      if(!cols[0] || cols[0] === '廠商編號') return;
+      const id  = cols[0];
+      const extra = { contact: cols[2]||'', tel: cols[3]||'', email: cols[4]||'' };
+      // 寫到廠商 extra localStorage
+      const saved = JSON.parse(localStorage.getItem('erp_sup_' + id) || '{}');
+      localStorage.setItem('erp_sup_' + id, JSON.stringify({ ...saved, ...extra }));
+      // 若廠商不在 SUPPLIERS 清單中，新增一筆
+      if(!SUPPLIERS.find(s => s.id === id)){
+        SUPPLIERS.push({ id, name: cols[1]||id });
+      } else {
+        const s = SUPPLIERS.find(s => s.id === id);
+        if(cols[1]) s.name = cols[1];
+      }
+      count++;
+    });
+    showToast(`✅ 已更新 ${count} 筆廠商`);
+  }
+
   initImportPage();
 }
+
+// ── 舊版相容（保留給其他地方可能呼叫） ──
+function previewCustomerImport(input){ previewImport('customers', input); }
+function doImportCustomers(){ doImport('customers'); }
 
 // ================================
 // Modals (dynamic creation)

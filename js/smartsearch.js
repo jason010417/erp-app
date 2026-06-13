@@ -196,7 +196,7 @@ function searchItemsFor(context, q){
         <div class="ss-name">${item.name}</div>
         <div class="ss-sub">${item.id}</div>
       </div>
-      <div class="${qCls} ss-stock">${stock}<span class="ss-unit">${item.unit||'個'}</span></div>
+      <div class="${qCls} ss-stock">${stock}</div>
     </div>`;
   }).join('');
 }

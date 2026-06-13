@@ -92,7 +92,6 @@ function renderInventoryList(){
       </div>
       <div class="inv-item-right">
         <div class="inv-qty ${cls}">${stock}</div>
-        <div class="inv-unit">${item.unit}</div>
       </div>
     </div>`;
   }).join('');
@@ -120,13 +119,13 @@ function showItemDetail(productId){
     const cls = qty <= 0 ? 'inv-qty empty' : isLowStock(productId) ? 'inv-qty low' : 'inv-qty ok';
     html += `<div class="amount-row">
       <span>${loc.name}</span>
-      <span class="${cls}" style="font-size:20px;">${qty} ${item.unit}</span>
+      <span class="${cls}" style="font-size:20px;">${qty}</span>
     </div>`;
   });
 
   html += `<div class="amount-row grand">
     <span>合計</span>
-    <strong>${total} ${item.unit}</strong>
+    <strong>${total}</strong>
   </div></div>`;
 
   // 商品資訊
@@ -136,7 +135,7 @@ function showItemDetail(productId){
     <div class="amount-row"><span>進貨價</span><span>$${item.costPrice||0}</span></div>
     <div class="amount-row"><span>安全庫存</span>
       <span style="color:${getTotalStock(item.id)<=(item.safetyStock||0)?'var(--red)':'var(--text)'};">
-        ${item.safetyStock||0} ${item.unit||'個'}
+        ${item.safetyStock||0}
       </span>
     </div>
   </div>`;
