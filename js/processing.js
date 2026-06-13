@@ -166,8 +166,10 @@ function _renderProcModal(){
       </div>
       <div class="search-bar" style="margin-bottom:4px;">
         <i class="ti ti-search"></i>
-        <input type="search" id="proc-in-search" placeholder="搜尋原料 / 半成品..." />
+        <input type="search" id="proc-in-search" placeholder="搜尋原料 / 半成品（所有品項）..."
+          oninput="searchItemsFor('proc_in', this.value)" />
       </div>
+      <div id="proc-in-search-result" style="display:none;"></div>
       <div id="proc-in-list" style="margin-bottom:12px;"></div>
 
       <!-- ── 產出成品 ── -->
@@ -176,8 +178,10 @@ function _renderProcModal(){
       </div>
       <div class="search-bar" style="margin-bottom:4px;">
         <i class="ti ti-search"></i>
-        <input type="search" id="proc-out-search" placeholder="搜尋成品 / 包裝品..." />
+        <input type="search" id="proc-out-search" placeholder="搜尋成品 / 包裝品（所有品項）..."
+          oninput="searchItemsFor('proc_out', this.value)" />
       </div>
+      <div id="proc-out-search-result" style="display:none;"></div>
       <div id="proc-out-list" style="margin-bottom:12px;"></div>
 
       <!-- ── 損耗記錄 ── -->
@@ -220,29 +224,19 @@ function _renderProcModal(){
   _renderProcInputList();
   _renderProcOutputList();
   _updateProcLossDisplay();
-  _attachProcSearches(defaultLocId);
 }
 
-// ── 搜尋框綁定 ──
-function _attachProcSearches(defaultLocId){
-  const inEl  = document.getElementById('proc-in-search');
-  const outEl = document.getElementById('proc-out-search');
-  if(!inEl || !outEl) return;
+// ── 投入 / 產出品項管理（全域入口，供 addItemTo 呼叫）──
+function addProcInputItem(itemId)  { _addProcItem('input',  itemId); }
+function addProcOutputItem(itemId) { _addProcItem('output', itemId); }
 
-  SmartSearch.attach(inEl, item => _addProcItem('input', item, defaultLocId), {
-    pool: getMaterialItems(),
-  });
-  SmartSearch.attach(outEl, item => _addProcItem('output', item, defaultLocId), {
-    pool: getSellableItems(),
-  });
-}
-
-// ── 投入 / 產出品項管理 ──
-function _addProcItem(side, item, defaultLocId){
+function _addProcItem(side, itemId){
   if(!_currentProc) return;
-  const list   = side === 'input' ? _currentProc.inputs : _currentProc.outputs;
-  const locs   = typeof getStoreLocations === 'function' ? getStoreLocations() : [];
-  const locId  = locs[0]?.id || defaultLocId;
+  const item = typeof getItem === 'function' ? getItem(itemId) : null;
+  if(!item){ showToast('⚠️ 找不到品項'); return; }
+  const list = side === 'input' ? _currentProc.inputs : _currentProc.outputs;
+  const locs  = typeof getStoreLocations === 'function' ? getStoreLocations() : [];
+  const locId = locs[0]?.id || 'store_A';
   const existing = list.find(i => i.itemId === item.id);
   if(existing){
     existing.qty++;
@@ -250,10 +244,8 @@ function _addProcItem(side, item, defaultLocId){
     list.push({ itemId: item.id, name: item.name, emoji: item.emoji || '📦', qty: 1, locationId: locId });
   }
   if(side === 'input'){
-    document.getElementById('proc-in-search').value = '';
     _renderProcInputList();
   } else {
-    document.getElementById('proc-out-search').value = '';
     _renderProcOutputList();
   }
   _updateProcLossDisplay();

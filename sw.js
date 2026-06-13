@@ -1,4 +1,4 @@
-const CACHE = 'erp-v2-build9';
+const CACHE = 'erp-v2-build10';
 const ASSETS = [
   './',
   './index.html',
