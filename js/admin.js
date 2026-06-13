@@ -91,7 +91,7 @@ function saveProductEdit(){
     localStorage.setItem('erp_item_flags', JSON.stringify(all));
     if(typeof pushToFirebase === 'function') pushToFirebase('itemFlags', all);
   }
-  if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', buildProductOverrides());
+  _saveProductOverrides();
   document.getElementById('productEditorModal').style.display = 'none';
   showToast('商品已更新');
   renderAdminProducts(document.getElementById('ap-search')?.value || '');
@@ -103,11 +103,16 @@ function buildProductOverrides(){
   });
   return obj;
 }
+function _saveProductOverrides(){
+  const ov = buildProductOverrides();
+  localStorage.setItem('erp_product_overrides', JSON.stringify(ov));
+  if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', ov);
+}
 function toggleProductActive(id){
   const item = ITEM_INDEX[id];
   if(!item) return;
   item.active = !item.active;
-  if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', buildProductOverrides());
+  _saveProductOverrides();
   document.getElementById('productEditorModal').style.display = 'none';
   showToast(item.active ? '商品已啟用' : '商品已停用');
   renderAdminProducts('');
@@ -638,21 +643,34 @@ function doImport(type){
     });
     saveInventory();
     if(typeof pushToFirebase === 'function') pushToFirebase('inventory', inventory);
-    showToast(`✅ 已更新 ${count} 筆庫存`);
+    if(typeof renderInventorySummary === 'function') renderInventorySummary();
+    if(count === 0){
+      showToast('⚠️ 匯入 0 筆庫存，請確認 CSV 格式與商品編號是否正確', 4000);
+    } else {
+      showToast(`✅ 已更新 ${count} 筆庫存`);
+    }
 
   } else if(type === 'prices'){
-    // 格式：商品編號, 售價, 進貨價, 安全庫存
+    // 支援兩種格式：
+    //   商品售價（4欄）：商品編號, 售價, 進貨價, 安全庫存
+    //   商品明細（8欄）：商品編號, 品名, 類別, 單位, 售價, 進貨價, 安全庫存, 廠商
     rows.forEach(cols => {
       const id = cols[0];
       if(!id || id === '商品編號') return;
       const item = ITEM_INDEX[id];
       if(!item) return;
-      if(cols[1] !== '' && cols[1] !== undefined) item.salePrice   = parseInt(cols[1]) || 0;
-      if(cols[2] !== '' && cols[2] !== undefined) item.costPrice   = parseInt(cols[2]) || 0;
-      if(cols[3] !== '' && cols[3] !== undefined) item.safetyStock = parseInt(cols[3]) || 0;
+      // 自動偵測格式：若第2欄是非數字文字 → 商品明細格式，售價從第5欄(index 4)開始
+      const isDetailFormat = cols.length >= 5 && isNaN(parseInt(cols[1]));
+      const offset = isDetailFormat ? 4 : 1;
+      const vSale   = cols[offset];
+      const vCost   = cols[offset + 1];
+      const vSafety = cols[offset + 2];
+      if(vSale   !== '' && vSale   !== undefined) item.salePrice   = parseInt(vSale)   || 0;
+      if(vCost   !== '' && vCost   !== undefined) item.costPrice   = parseInt(vCost)   || 0;
+      if(vSafety !== '' && vSafety !== undefined) item.safetyStock = parseInt(vSafety) || 0;
       count++;
     });
-    if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', buildProductOverrides());
+    _saveProductOverrides();
     showToast(`✅ 已更新 ${count} 筆商品售價`);
 
   } else if(type === 'customers'){

@@ -98,6 +98,10 @@ function applyRemoteData(data){
     Object.keys(data.bom).forEach(id => { BOM[id] = data.bom[id]; });
     localStorage.setItem('erp_bom', JSON.stringify(BOM));
   }
+  if(data.productOverrides && typeof applyProductOverrides === 'function'){
+    localStorage.setItem('erp_product_overrides', JSON.stringify(data.productOverrides));
+    applyProductOverrides(data.productOverrides);
+  }
   if(data.logs){
     const remote = typeof data.logs === 'object' ? Object.values(data.logs) : data.logs;
     // 合併，避免覆蓋本機未上傳的記錄

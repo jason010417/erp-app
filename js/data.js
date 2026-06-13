@@ -4335,6 +4335,25 @@ function getMaterialItems(){
   return ALL_ITEMS.filter(i => computeItemFlags(i).canBeMaterial && i.active !== false);
 }
 
+// ── 商品覆寫（售價/進貨價/安全庫存/啟用）─ 啟動時套用 ──
+function applyProductOverrides(overrides){
+  if(!overrides) return;
+  ALL_ITEMS.forEach(item => {
+    const ov = overrides[item.id];
+    if(!ov) return;
+    if(ov.salePrice   !== undefined) item.salePrice   = ov.salePrice;
+    if(ov.costPrice   !== undefined) item.costPrice   = ov.costPrice;
+    if(ov.safetyStock !== undefined) item.safetyStock = ov.safetyStock;
+    if(ov.active      !== undefined) item.active      = ov.active;
+  });
+}
+
+// 頁面載入時立即套用 localStorage 裡的覆寫（Firebase 連線前先用本機快取）
+try {
+  const _savedOv = localStorage.getItem('erp_product_overrides');
+  if(_savedOv) applyProductOverrides(JSON.parse(_savedOv));
+} catch(e) {}
+
 // 後台手動覆寫旗標（管理員）
 function setItemFlags(itemId, flags){
   const all = JSON.parse(localStorage.getItem('erp_item_flags') || '{}');
