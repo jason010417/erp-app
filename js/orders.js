@@ -30,6 +30,20 @@ const PAY_STATUS = {
   paid:    { label:'已收款',   cls:'pay-badge-paid' },
 };
 
+// ── 訂單類型 ──
+const ORDER_TYPE_CFG = {
+  retail:  { label:'零售', icon:'ti-receipt',   color:'#BA7517', bg:'#FAEEDA' },
+  project: { label:'專案', icon:'ti-briefcase', color:'#6B4FBB', bg:'#EDE9F8' },
+};
+
+function orderTypeBadge(type){
+  const t = ORDER_TYPE_CFG[type] || ORDER_TYPE_CFG.project;
+  return `<span style="font-size:11px;padding:2px 8px;border-radius:20px;
+    background:${t.bg};color:${t.color};font-weight:600;white-space:nowrap;">
+    <i class="ti ${t.icon}"></i> ${t.label}
+  </span>`;
+}
+
 function orderStatusBadge(status){
   const s = ORDER_STATUS[status] || ORDER_STATUS.pending;
   return `<span class="status-badge ${s.cls}"><i class="ti ${s.icon}"></i> ${s.label}</span>`;
@@ -41,20 +55,36 @@ function payStatusBadge(status){
 }
 
 // ── 列表 ──
-let _orderFilter = 'all';
+let _orderFilter     = 'all';
+let _orderTypeFilter = 'all';  // 'all' | 'retail' | 'project'
 
-function renderOrderList(filter){
-  _orderFilter = filter || 'all';
+function renderOrderList(filter, typeFilter){
+  _orderFilter     = filter     || _orderFilter     || 'all';
+  _orderTypeFilter = typeFilter || _orderTypeFilter || 'all';
+
+  // 狀態 tabs
   document.querySelectorAll('#page-orders .ftab').forEach((btn, i) => {
     const filters = ['all','pending','producing','ready','shipped','archived'];
     btn.classList.toggle('active', filters[i] === _orderFilter);
   });
 
+  // 類型篩選（動態插入一次）
+  _ensureOrderTypeBar();
+  document.querySelectorAll('#order-type-bar .type-ftab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === _orderTypeFilter);
+  });
+
   const el = document.getElementById('order-list');
   if(!el) return;
+
   let list = _orderFilter === 'all'
     ? orders
     : orders.filter(o => o.status === _orderFilter);
+
+  if(_orderTypeFilter !== 'all'){
+    list = list.filter(o => (o.orderType || 'project') === _orderTypeFilter);
+  }
+
   list = list.slice().reverse();
 
   if(!list.length){
@@ -69,7 +99,8 @@ function renderOrderList(filter){
     return `<div class="list-card" onclick="showOrderDetail('${o.id}')">
       <div class="list-card-top">
         <span class="list-card-no">${o.no}</span>
-        <div style="display:flex;gap:6px;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          ${orderTypeBadge(o.orderType || 'project')}
           ${orderStatusBadge(o.status)}
           ${payStatusBadge(o.payStatus)}
         </div>
@@ -89,11 +120,36 @@ function renderOrderList(filter){
   }).join('');
 }
 
-// ── 從估價單建立訂單 ──
+function _ensureOrderTypeBar(){
+  if(document.getElementById('order-type-bar')) return;
+  const bar = document.createElement('div');
+  bar.id        = 'order-type-bar';
+  bar.style.cssText = 'display:flex;gap:6px;padding:0 4px 8px;';
+  bar.innerHTML = `
+    <button class="type-ftab active" data-type="all"
+      onclick="renderOrderList(null,'all')"
+      style="font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);
+      background:var(--surface);color:var(--text2);cursor:pointer;">全部類型</button>
+    <button class="type-ftab" data-type="retail"
+      onclick="renderOrderList(null,'retail')"
+      style="font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid #FAEEDA;
+      background:var(--bg);color:#BA7517;cursor:pointer;">
+      <i class="ti ti-receipt"></i> 零售</button>
+    <button class="type-ftab" data-type="project"
+      onclick="renderOrderList(null,'project')"
+      style="font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid #EDE9F8;
+      background:var(--bg);color:#6B4FBB;cursor:pointer;">
+      <i class="ti ti-briefcase"></i> 專案</button>`;
+  const orderList = document.getElementById('order-list');
+  if(orderList) orderList.before(bar);
+}
+
+// ── 從估價單建立訂單（固定為專案類型）──
 function newOrderFromEstimate(estimate){
   const o = {
     id:          null,
     no:          genOrderNo(),
+    orderType:   'project',
     source:      'phone',
     estimateRef: estimate.no,
     estimateId:  estimate.id,
@@ -142,32 +198,67 @@ function newOrderFromEstimate(estimate){
   showPage('order-edit');
 }
 
-// ── 手動新增訂單 ──
+// ── 手動新增訂單：先選類型 ──
 function newOrder(){
+  const existing = document.getElementById('orderTypeModal');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.className     = 'modal-overlay';
+  modal.id            = 'orderTypeModal';
+  modal.style.display = 'flex';
+  modal.onclick = e => { if(e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="modal-card" style="max-width:340px;">
+      <div class="modal-title"><i class="ti ti-plus"></i> 新增訂單</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">請選擇訂單類型</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">
+        <button onclick="document.getElementById('orderTypeModal').remove();_createNewOrder('retail')"
+          style="padding:18px 12px;border-radius:var(--radius);border:2px solid #FAEEDA;
+          background:#FFFDF7;color:#7B341E;cursor:pointer;text-align:center;">
+          <i class="ti ti-receipt" style="font-size:28px;display:block;margin-bottom:6px;color:#BA7517;"></i>
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px;">零售訂單</div>
+          <div style="font-size:11px;color:#975A16;">電話/門市接單<br>現貨出貨</div>
+        </button>
+        <button onclick="document.getElementById('orderTypeModal').remove();_createNewOrder('project')"
+          style="padding:18px 12px;border-radius:var(--radius);border:2px solid #EDE9F8;
+          background:#F9F7FE;color:#44337A;cursor:pointer;text-align:center;">
+          <i class="ti ti-briefcase" style="font-size:28px;display:block;margin-bottom:6px;color:#6B4FBB;"></i>
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px;">專案接單</div>
+          <div style="font-size:11px;color:#553C9A;">客製/大宗/禮盒<br>需生產或交期</div>
+        </button>
+      </div>
+      <button class="modal-cancel-btn" style="margin-top:10px;width:100%;"
+        onclick="document.getElementById('orderTypeModal').remove()">取消</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function _createNewOrder(type){
   _currentOrder = {
-    id:          null,
-    no:          genOrderNo(),
-    source:      'phone',
-    estimateRef: '',
-    estimateId:  null,
-    customerId:  null,
-    items:       [],
-    subtotal:    0,
-    totalAmount: 0,
+    id:            null,
+    no:            genOrderNo(),
+    orderType:     type,
+    source:        'phone',
+    estimateRef:   '',
+    estimateId:    null,
+    customerId:    null,
+    items:         [],
+    subtotal:      0,
+    totalAmount:   0,
     orderDiscount: { type:'none', value:0 },
-    deposit:     0,
-    depositPaid: false,
-    paidAmount:  0,
-    payStatus:   'unpaid',
-    delivery:    'delivery',
-    logistics:   '',
-    trackingNo:  '',
-    deliveryDate:'',
-    shippedAt:   '',
-    remark:      '',
-    status:      'pending',
-    createdAt:   todayStr(),
-    updatedAt:   todayStr(),
+    deposit:       0,
+    depositPaid:   false,
+    paidAmount:    0,
+    payStatus:     'unpaid',
+    delivery:      type === 'retail' ? 'pickup' : 'delivery',
+    logistics:     '',
+    trackingNo:    '',
+    deliveryDate:  '',
+    shippedAt:     '',
+    remark:        '',
+    status:        'pending',
+    createdAt:     todayStr(),
+    updatedAt:     todayStr(),
   };
   renderOrderEditPage();
   showPage('order-edit');
@@ -179,8 +270,9 @@ let _currentOrder = null;
 function renderOrderEditPage(){
   const page = document.getElementById('page-order-edit');
   if(!page) return;
-  const o    = _currentOrder;
-  const cust = getCustomer(o.customerId);
+  const o        = _currentOrder;
+  const cust     = getCustomer(o.customerId);
+  const isRetail = (o.orderType || 'project') === 'retail';
   const isLocked     = o.status === 'archived' && !isManager();
   const isItemLocked = o.status !== 'pending' && !isAdmin();  // 確認後品項鎖定，管理員可解
 
@@ -198,10 +290,13 @@ function renderOrderEditPage(){
     </div>
 
     <div class="form-card">
-      <!-- 單號 / 來源估價單 -->
+      <!-- 單號 / 類型 -->
       <div class="form-meta-row">
         <span class="form-no">${o.no}</span>
-        <span class="form-date">${fmtDate(o.createdAt)}</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${orderTypeBadge(o.orderType || 'project')}
+          <span class="form-date">${fmtDate(o.createdAt)}</span>
+        </div>
       </div>
       ${o.estimateRef ? `
       <div style="padding:8px 12px;background:var(--purple-light);border-radius:var(--radius-sm);
@@ -278,6 +373,7 @@ function renderOrderEditPage(){
       <!-- 付款 -->
       <div class="form-section-title" style="margin-top:14px;">付款</div>
       <div class="amount-section">
+        ${!isRetail ? `
         <div class="amount-row">
           <span>訂金</span>
           <input type="number" id="ord-deposit" value="${o.deposit||0}" min="0"
@@ -292,7 +388,7 @@ function renderOrderEditPage(){
               ${isLocked?'disabled':''} onchange="updateOrderPay()" />
             <span>已收</span>
           </label>
-        </div>
+        </div>` : ''}
         <div class="amount-row">
           <span>付款狀態</span>
           <div style="display:flex;gap:6px;">
@@ -355,8 +451,8 @@ function renderOrderEditPage(){
       </div>
     </div>
 
-    <!-- 生產單連結 -->
-    ${(() => {
+    <!-- 生產單連結（僅專案訂單）-->
+    ${!isRetail ? (() => {
       const relProd = typeof productionOrders !== 'undefined'
         ? productionOrders.filter(p => p.sourceOrderId === o.id)
         : [];
@@ -375,7 +471,7 @@ function renderOrderEditPage(){
           </span>
         </div>`;
       }).join('');
-    })()}
+    })() : ''}
 
     <!-- 操作按鈕 -->
     ${o.status === 'pending' ? `
@@ -603,7 +699,16 @@ function confirmOrder(){
   }
   collectOrderForm();
 
-  // ① 先算庫存缺口，不存檔
+  // 零售訂單：不做庫存生產檢查，直接進待出貨
+  if((_currentOrder.orderType || 'project') === 'retail'){
+    _currentOrder.status = 'ready';
+    upsertOrder();
+    showToast('✅ 零售訂單已確認，進入待出貨：' + _currentOrder.no);
+    showOrderDetail(_currentOrder.id);
+    return;
+  }
+
+  // 專案訂單：① 先算庫存缺口，不存檔
   const locId = getMainLocation()?.id || 'store_A';
   const needProduction = _currentOrder.items
     .map(item => {
