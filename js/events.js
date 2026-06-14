@@ -384,9 +384,14 @@ function startEventPOS(eventId){
       </div>
       <div class="event-quick-header">
         <span class="event-quick-label" style="margin:0;">外展商品</span>
-        <button class="small-btn" onclick="openRestockModal('${eventId}')">
-          <i class="ti ti-package-import"></i> 補貨
-        </button>
+        <div style="display:flex;gap:6px;">
+          <button class="small-btn" onclick="openEventRecordsModal('${eventId}')">
+            <i class="ti ti-clipboard-list"></i> 記錄
+          </button>
+          <button class="small-btn" onclick="openRestockModal('${eventId}')">
+            <i class="ti ti-package-import"></i> 補貨
+          </button>
+        </div>
       </div>
       <div class="event-quick-grid" id="event-quick-grid"></div>`;
     renderEventQuickGrid(ev);
@@ -535,6 +540,7 @@ function saveRestock(){
   added.forEach(r => {
     const evItem = (ev.items||[]).find(i=>i.id===r.id);
     if(evItem) evItem.takeQty = (evItem.takeQty||0) + r.addQty;
+    addLog({ op:'ev_restock', eventId:_restockEventId, productId:r.id, productName:r.name, qty:r.addQty });
   });
   saveEvents();
   closeRestockModal();
@@ -719,22 +725,204 @@ function deleteEvent(id){
   showPage('events');
 }
 
-// 管理員從編輯頁刪除（依照是否有銷售記錄決定動作）
+// 管理員從編輯頁刪除（無論有無銷售都可刪除，但視情況顯示庫存警告）
 function confirmDeleteCurrentEvent(){
   const ev = _currentEvent;
   if(!ev || !ev.id) return;
-  const salesCount = getEventLogs(ev.id).length;
-  if(salesCount > 0){
-    if(!confirm(`「${ev.name}」已有 ${salesCount} 筆銷售記錄，\n無法完全刪除，只能標記為已結束。\n\n確定要取消此活動嗎？`)) return;
-    const idx = events.findIndex(e=>e.id===ev.id);
-    if(idx >= 0){ events[idx].status = 'closed'; events[idx].endDate = todayStr(); }
-    saveEvents();
-    showToast('外展活動已標記為結束');
-    showPage('events');
+  const salesCount  = getEventLogs(ev.id).length;
+  const wasUploaded = getOfflineState(ev.id).uploaded;
+  let warnMsg;
+  if(salesCount > 0 && wasUploaded){
+    warnMsg = `「${ev.name}」已有 ${salesCount} 筆銷售記錄，且離線資料已上傳（庫存已扣減）。\n\n⚠️ 刪除後銷售記錄會消失，但庫存不會自動恢復，可能造成帳目不符。\n\n確定仍要刪除嗎？`;
+  } else if(salesCount > 0){
+    warnMsg = `「${ev.name}」已有 ${salesCount} 筆銷售記錄（在線模式，庫存未扣）。\n刪除後銷售記錄也會消失。\n\n確定要刪除嗎？`;
   } else {
-    if(!confirm(`確定要刪除「${ev.name}」嗎？此操作無法復原。`)) return;
-    deleteEvent(ev.id);
+    warnMsg = `確定要刪除「${ev.name}」嗎？此操作無法復原。`;
   }
+  if(!confirm(warnMsg)) return;
+  deleteEvent(ev.id);
+}
+
+// ── 銷售/補貨記錄 Modal ──
+let _evRecordsEventId = null;
+
+function openEventRecordsModal(eventId){
+  _evRecordsEventId = eventId;
+  let modal = document.getElementById('ev-records-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'ev-records-modal';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
+  }
+  _renderEvRecordsModal(modal);
+  modal.style.display = 'flex';
+}
+
+function _renderEvRecordsModal(modal){
+  modal = modal || document.getElementById('ev-records-modal');
+  if(!modal) return;
+  const evLogs = logs
+    .filter(l => l.eventId === _evRecordsEventId && (l.op === 'pos_sale' || l.op === 'ev_restock'))
+    .sort((a, b) => (b._ts||0) - (a._ts||0));
+  const rows = evLogs.length
+    ? evLogs.map(l => _renderEvRecordRow(l)).join('')
+    : '<div class="order-empty">尚無記錄</div>';
+  modal.innerHTML = `
+    <div class="modal-card" style="padding:0;display:flex;flex-direction:column;max-height:85vh;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:8px;padding:16px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <i class="ti ti-clipboard-list" style="font-size:20px;color:var(--purple);"></i>
+        <div style="flex:1;font-size:17px;font-weight:700;">銷售與補貨記錄</div>
+        <button onclick="closeEvRecordsModal()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer;line-height:1;"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="overflow-y:auto;flex:1;">${rows}</div>
+    </div>`;
+}
+
+function _renderEvRecordRow(l){
+  const isSale  = l.op === 'pos_sale';
+  const timeStr = l._ts ? new Date(l._ts).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}) : '';
+  const icon    = isSale ? 'ti-shopping-cart' : 'ti-package-import';
+  const clr     = isSale ? 'var(--accent)' : 'var(--purple)';
+  const detail  = isSale ? `x${l.qty}  $${l.amount||(l.qty*(l.unitPrice||0))}` : `補貨 +${l.qty}`;
+  const noteEl  = l.note ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">📝 ${l.note}</div>` : '';
+  const editBtn = isSale
+    ? `<button class="ev-rec-edit" onclick="requireManager(()=>openEditSaleModal(${l._ts}),'修改記錄需要主管驗證')"><i class="ti ti-pencil"></i></button>`
+    : '';
+  return `<div class="ev-rec-row">
+    <i class="ti ${icon}" style="color:${clr};font-size:18px;flex-shrink:0;"></i>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span style="font-size:14px;font-weight:600;">${l.productName||''}</span>
+        <span style="font-size:12px;color:var(--text2);">${detail}</span>
+      </div>
+      ${noteEl}
+    </div>
+    <span style="font-size:12px;color:var(--text3);flex-shrink:0;">${timeStr}</span>
+    ${editBtn}
+  </div>`;
+}
+
+function closeEvRecordsModal(){
+  const modal = document.getElementById('ev-records-modal');
+  if(modal) modal.style.display = 'none';
+}
+
+// ── 修改銷售記錄 Modal ──
+let _editingLog = null;
+let _editingQty = 0;
+
+function openEditSaleModal(ts){
+  _editingLog = logs.find(l => l._ts === ts && l.op === 'pos_sale');
+  if(!_editingLog){ showToast('⚠️ 找不到記錄'); return; }
+  _editingQty = _editingLog.qty;
+  let modal = document.getElementById('ev-edit-sale-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'ev-edit-sale-modal';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
+  }
+  _renderEditSaleModal(modal);
+  modal.style.display = 'flex';
+}
+
+function _renderEditSaleModal(modal){
+  modal = modal || document.getElementById('ev-edit-sale-modal');
+  if(!modal || !_editingLog) return;
+  const l       = _editingLog;
+  const timeStr = l._ts ? new Date(l._ts).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+  const emoji   = (typeof getItem==='function' && getItem(l.productId)?.emoji) || '📦';
+  modal.innerHTML = `
+    <div class="modal-card" style="padding:0;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:8px;padding:16px 18px 12px;border-bottom:1px solid var(--border);">
+        <i class="ti ti-pencil" style="font-size:20px;color:var(--accent);"></i>
+        <div style="flex:1;font-size:17px;font-weight:700;">修改銷售記錄</div>
+        <button onclick="closeEditSaleModal()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer;line-height:1;"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="padding:16px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <span style="font-size:26px;">${emoji}</span>
+          <div>
+            <div style="font-size:15px;font-weight:700;">${l.productName}</div>
+            <div style="font-size:12px;color:var(--text3);">${timeStr}・$${l.unitPrice||0}/個</div>
+          </div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">數量</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button class="qty-btn" style="width:40px;height:40px;" onclick="editSaleQtyChange(-1)">−</button>
+            <input type="number" id="edit-sale-qty" value="${_editingQty}" min="1"
+              style="width:72px;height:40px;text-align:center;font-size:20px;font-weight:700;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);"
+              onchange="editSaleQtyInput(this.value)" onclick="this.select()" />
+            <button class="qty-btn" style="width:40px;height:40px;" onclick="editSaleQtyChange(1)">＋</button>
+            <span id="edit-sale-amount" style="font-size:14px;color:var(--text2);">= $${_editingQty*(l.unitPrice||0)}</span>
+          </div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:6px;">修改備註</div>
+          <input type="text" id="edit-sale-note" value="${l.note||''}" placeholder="輸入修改原因..."
+            style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--text);" />
+        </div>
+        <button class="confirm-btn" onclick="saveEditSale()" style="margin-bottom:8px;">
+          <i class="ti ti-check"></i> 儲存修改
+        </button>
+        <button class="danger-btn" onclick="confirmDeleteSaleLog()">
+          <i class="ti ti-trash"></i> 刪除此筆
+        </button>
+      </div>
+    </div>`;
+}
+
+function editSaleQtyChange(delta){
+  _editingQty = Math.max(1, _editingQty + delta);
+  const input = document.getElementById('edit-sale-qty');
+  if(input) input.value = _editingQty;
+  const amtEl = document.getElementById('edit-sale-amount');
+  if(amtEl && _editingLog) amtEl.textContent = `= $${_editingQty * (_editingLog.unitPrice||0)}`;
+}
+
+function editSaleQtyInput(val){
+  _editingQty = Math.max(1, parseInt(val)||1);
+  const amtEl = document.getElementById('edit-sale-amount');
+  if(amtEl && _editingLog) amtEl.textContent = `= $${_editingQty * (_editingLog.unitPrice||0)}`;
+}
+
+function closeEditSaleModal(){
+  const modal = document.getElementById('ev-edit-sale-modal');
+  if(modal) modal.style.display = 'none';
+}
+
+function saveEditSale(){
+  if(!_editingLog) return;
+  const note = document.getElementById('edit-sale-note')?.value.trim() || '';
+  _editingLog.qty      = _editingQty;
+  _editingLog.amount   = _editingQty * (_editingLog.unitPrice||0);
+  _editingLog.note     = note;
+  _editingLog._editedAt = nowStr();
+  saveLogs();
+  if(typeof updateLogInFirebase === 'function') updateLogInFirebase(_editingLog);
+  closeEditSaleModal();
+  _renderEvRecordsModal();
+  const ev = getEvent(_editingLog.eventId);
+  if(ev) renderEventQuickGrid(ev);
+  showToast(`✅ 已修改：${_editingLog.productName} x${_editingQty}`);
+}
+
+function confirmDeleteSaleLog(){
+  if(!_editingLog) return;
+  if(!confirm(`確定要刪除「${_editingLog.productName}」這筆銷售記錄嗎？`)) return;
+  const ts      = _editingLog._ts;
+  const fbKey   = _editingLog._fbKey;
+  const eventId = _editingLog.eventId;
+  logs = logs.filter(l => l._ts !== ts);
+  saveLogs();
+  if(fbKey && typeof deleteLogFromFirebase === 'function') deleteLogFromFirebase(fbKey);
+  closeEditSaleModal();
+  _renderEvRecordsModal();
+  const ev = getEvent(eventId);
+  if(ev) renderEventQuickGrid(ev);
+  showToast('🗑️ 記錄已刪除');
 }
 
 document.addEventListener('DOMContentLoaded', ()=>renderEventList());

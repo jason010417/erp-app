@@ -213,6 +213,20 @@ function pushLogToFirebase(log){
   log._fbKey  = ref.key;
 }
 
+// 更新單筆記錄（主管修改銷售用）
+function updateLogInFirebase(log){
+  if(!_fbReady || !_db || !log._fbKey) return;
+  _myWriteAt = Date.now();
+  _db.ref(`erp/logs/${log._fbKey}`).set(log).catch(err => console.warn('更新記錄失敗:', err));
+}
+
+// 刪除單筆記錄（主管刪除銷售用）
+function deleteLogFromFirebase(fbKey){
+  if(!_fbReady || !_db || !fbKey) return;
+  _myWriteAt = Date.now();
+  _db.ref(`erp/logs/${fbKey}`).remove().catch(err => console.warn('刪除記錄失敗:', err));
+}
+
 // ── 手動同步 ──
 function manualSync(){
   if(!_fbReady){ showToast('⚠️ 尚未連上 Firebase'); return; }
