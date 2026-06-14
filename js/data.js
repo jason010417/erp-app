@@ -4341,9 +4341,10 @@ function applyProductOverrides(overrides){
   ALL_ITEMS.forEach(item => {
     const ov = overrides[item.id];
     if(!ov) return;
-    if(ov.salePrice   !== undefined) item.salePrice   = ov.salePrice;
-    if(ov.costPrice   !== undefined) item.costPrice   = ov.costPrice;
-    if(ov.safetyStock !== undefined) item.safetyStock = ov.safetyStock;
+    // salePrice = 0 視為無效覆寫（防止錯誤 CSV 匯入破壞 POS）
+    if(ov.salePrice   !== undefined && ov.salePrice > 0)  item.salePrice   = ov.salePrice;
+    if(ov.costPrice   !== undefined && ov.costPrice > 0)  item.costPrice   = ov.costPrice;
+    if(ov.safetyStock !== undefined && ov.safetyStock >= 0) item.safetyStock = ov.safetyStock;
     if(ov.active      !== undefined) item.active      = ov.active;
   });
 }

@@ -108,6 +108,12 @@ function _saveProductOverrides(){
   localStorage.setItem('erp_product_overrides', JSON.stringify(ov));
   if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', ov);
 }
+function clearProductOverrides(){
+  localStorage.removeItem('erp_product_overrides');
+  if(typeof pushToFirebase === 'function') pushToFirebase('productOverrides', null);
+  showToast('✅ 商品售價覆寫已清除，請重新整理頁面後重新匯入商品售價');
+}
+
 function toggleProductActive(id){
   const item = ITEM_INDEX[id];
   if(!item) return;

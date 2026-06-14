@@ -566,6 +566,11 @@
           <div><div class="admin-item-name">匯出所有記錄</div><div class="admin-item-sub">下載 CSV 備份</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
+        <button class="admin-item danger" onclick="requireAdmin(clearProductOverrides)">
+          <i class="ti ti-eraser"></i>
+          <div><div class="admin-item-name">清除商品售價覆寫</div><div class="admin-item-sub">恢復預設值，POS 搜尋失效時使用</div></div>
+          <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
+        </button>
         <button class="admin-item danger" onclick="requireAdmin(confirmResetInventory)">
           <i class="ti ti-refresh"></i>
           <div><div class="admin-item-name">重設庫存</div><div class="admin-item-sub">清除並重新設定</div></div>
