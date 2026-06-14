@@ -164,7 +164,10 @@ function renderEventEditPage(){
     <div id="ev-items-list"></div>
     <button class="confirm-btn" style="margin-top:8px;" onclick="saveEvent()">
       <i class="ti ti-check"></i> 儲存外展活動
-    </button>`;
+    </button>
+    ${ev.id ? `<button class="danger-btn" style="margin-top:8px;" onclick="requireAdmin(confirmDeleteCurrentEvent)">
+      <i class="ti ti-trash"></i> 刪除外展活動
+    </button>` : ''}`;
   renderEvItemsList();
 }
 
@@ -710,11 +713,28 @@ function submitEventUpload(){
 }
 
 function deleteEvent(id){
-  if(!confirm('確定刪除此外展活動？')) return;
   events = events.filter(e=>e.id!==id);
   saveEvents();
-  showToast('🗑️ 已刪除');
+  showToast('🗑️ 外展活動已刪除');
   showPage('events');
+}
+
+// 管理員從編輯頁刪除（依照是否有銷售記錄決定動作）
+function confirmDeleteCurrentEvent(){
+  const ev = _currentEvent;
+  if(!ev || !ev.id) return;
+  const salesCount = getEventLogs(ev.id).length;
+  if(salesCount > 0){
+    if(!confirm(`「${ev.name}」已有 ${salesCount} 筆銷售記錄，\n無法完全刪除，只能標記為已結束。\n\n確定要取消此活動嗎？`)) return;
+    const idx = events.findIndex(e=>e.id===ev.id);
+    if(idx >= 0){ events[idx].status = 'closed'; events[idx].endDate = todayStr(); }
+    saveEvents();
+    showToast('外展活動已標記為結束');
+    showPage('events');
+  } else {
+    if(!confirm(`確定要刪除「${ev.name}」嗎？此操作無法復原。`)) return;
+    deleteEvent(ev.id);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', ()=>renderEventList());

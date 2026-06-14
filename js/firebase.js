@@ -109,9 +109,10 @@ function applyRemoteData(data){
   }
   if(data.logs){
     const remote = typeof data.logs === 'object' ? Object.values(data.logs) : data.logs;
-    // 合併，避免覆蓋本機未上傳的記錄
-    const localNew = logs.filter(l => !l._fbKey);
-    const merged   = [...remote, ...localNew].sort((a,b)=>(a._ts||0)-(b._ts||0));
+    // 保留本機日誌：(1) 無 fbKey（純本機）(2) 有 fbKey 但尚未同步至 Firebase（離線排隊中）
+    const remoteKeys = new Set(remote.map(l => l._fbKey).filter(Boolean));
+    const localNew   = logs.filter(l => !l._fbKey || !remoteKeys.has(l._fbKey));
+    const merged     = [...remote, ...localNew].sort((a,b)=>(a._ts||0)-(b._ts||0));
     logs = merged;
     localStorage.setItem('erp_logs', JSON.stringify(logs.slice(-1000)));
   }
