@@ -76,6 +76,22 @@ function addPOSItem(productId){
 // 讓 smartsearch 可以呼叫
 window.addPOSItem = addPOSItem;
 
+// 取得購物車中某商品的數量（供外展快捷格使用）
+function getPOSCartQty(itemId){
+  return _posCart.find(i => i.id === itemId)?.qty || 0;
+}
+window.getPOSCartQty = getPOSCartQty;
+
+// 從購物車中移除一個某商品（供外展快捷格 − 鍵使用）
+function removePOSItemById(productId){
+  const idx = _posCart.findIndex(i => i.id === productId);
+  if(idx < 0) return;
+  if(_posCart[idx].qty > 1) _posCart[idx].qty--;
+  else _posCart.splice(idx, 1);
+  renderCart(); calcPOSTotal();
+}
+window.removePOSItemById = removePOSItemById;
+
 function removePOSItem(idx){ _posCart.splice(idx,1); renderCart(); calcPOSTotal(); }
 function changePOSQty(idx, delta){
   const item = _posCart[idx];

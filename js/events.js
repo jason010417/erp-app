@@ -379,7 +379,12 @@ function startEventPOS(eventId){
         <span class="event-banner-day">${totalEventDays(ev)>1?'外展模式':''}</span>
         <i class="ti ti-chevron-right" style="margin-left:auto;"></i>
       </div>
-      <div class="event-quick-label">外展商品</div>
+      <div class="event-quick-header">
+        <span class="event-quick-label" style="margin:0;">外展商品</span>
+        <button class="small-btn" onclick="openRestockModal('${eventId}')">
+          <i class="ti ti-package-import"></i> 補貨
+        </button>
+      </div>
       <div class="event-quick-grid" id="event-quick-grid"></div>`;
     renderEventQuickGrid(ev);
   }
@@ -397,20 +402,31 @@ function renderEventQuickGrid(ev){
   const grid = document.getElementById('event-quick-grid');
   if(!grid) return;
   const activeItems = (ev.items||[]).filter(i=>(i.takeQty||0)>0);
+  if(!activeItems.length){
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:12px;color:var(--text3);font-size:13px;">尚未設定帶貨商品</div>`;
+    return;
+  }
   grid.innerHTML = activeItems.map(item => {
     const sold      = calcEventItemSoldQty(ev.id, item.id);
     const remaining = Math.max(0, item.takeQty - sold);
     const soldOut   = remaining <= 0;
     const low       = !soldOut && remaining <= 3;
-    return `<button class="event-quick-btn ${soldOut?'sold-out':''}"
-      onclick="${soldOut?`showToast('⚠️ 此商品已售完')`:`addPOSItem('${item.id}')`}">
-      <span class="eq-emoji">${item.emoji}</span>
-      <span class="eq-name">${item.name.length>8?item.name.slice(0,8)+'…':item.name}</span>
-      <span class="eq-price">$${item.price}</span>
-      <span class="eq-remain ${soldOut?'eq-sold':low?'eq-low':''}">
-        ${soldOut?'售完':remaining+'/'+item.takeQty}
-      </span>
-    </button>`;
+    const cartQty   = typeof getPOSCartQty === 'function' ? getPOSCartQty(item.id) : 0;
+    const name      = item.name.length > 7 ? item.name.slice(0,7)+'…' : item.name;
+    const addFn     = soldOut ? `showToast('⚠️ 此商品已售完')` : `adjustQuickItem('${ev.id}','${item.id}',1)`;
+    return `<div class="event-quick-card ${soldOut?'sold-out':''}">
+      <div class="eq-tap-area" onclick="${addFn}">
+        <span class="eq-emoji">${item.emoji}</span>
+        <span class="eq-name">${name}</span>
+        <span class="eq-price">$${item.price}</span>
+        <span class="eq-remain ${soldOut?'eq-sold':low?'eq-low':''}">剩 ${remaining}/${item.takeQty}</span>
+      </div>
+      <div class="eq-qty-row">
+        <button class="eq-ctrl-btn" onclick="adjustQuickItem('${ev.id}','${item.id}',-1)" ${cartQty<=0?'disabled':''}>−</button>
+        <span class="eq-qty-num ${cartQty>0?'':'eq-qty-zero'}">${cartQty||0}</span>
+        <button class="eq-ctrl-btn" onclick="${addFn}" ${soldOut?'disabled':''}>＋</button>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -418,8 +434,109 @@ function renderEventQuickGrid(ev){
 function onEventSale(eventId, cartItems){
   const ev = getEvent(eventId);
   if(!ev) return;
-  // 標記 logs 為此外展
-  // （pos.js 已在 addLog 裡帶了 eventId）
+  renderEventQuickGrid(ev);
+}
+
+// ── 快捷格 +/− ──
+function adjustQuickItem(eventId, itemId, delta){
+  if(delta > 0){
+    if(typeof addPOSItem === 'function') addPOSItem(itemId);
+  } else {
+    if(typeof removePOSItemById === 'function') removePOSItemById(itemId);
+  }
+  const ev = getEvent(eventId);
+  if(ev) renderEventQuickGrid(ev);
+}
+
+// ── 補貨 Modal ──
+let _restockEventId = null;
+let _restockItems   = [];
+
+function openRestockModal(eventId){
+  _restockEventId = eventId;
+  const ev = getEvent(eventId);
+  if(!ev) return;
+  _restockItems = (ev.items||[]).map(item => {
+    const sold      = calcEventItemSoldQty(ev.id, item.id);
+    const remaining = Math.max(0, (item.takeQty||0) - sold);
+    return { id:item.id, name:item.name, emoji:item.emoji, remaining, addQty:0 };
+  });
+  let modal = document.getElementById('restock-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id        = 'restock-modal';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
+  }
+  _renderRestockModal(modal);
+  modal.style.display = 'flex';
+}
+
+function _renderRestockModal(modal){
+  modal = modal || document.getElementById('restock-modal');
+  if(!modal) return;
+  modal.innerHTML = `
+    <div class="modal-card" style="padding:0;display:flex;flex-direction:column;max-height:80vh;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:8px;padding:16px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <i class="ti ti-package-import" style="font-size:20px;color:var(--purple);"></i>
+        <div style="flex:1;font-size:17px;font-weight:700;">補貨</div>
+        <button onclick="closeRestockModal()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer;line-height:1;">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>
+      <div id="restock-items-list" style="overflow-y:auto;flex:1;"></div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;">
+        <button class="confirm-btn" onclick="saveRestock()">
+          <i class="ti ti-check"></i> 確認補貨
+        </button>
+      </div>
+    </div>`;
+  _renderRestockItems();
+}
+
+function _renderRestockItems(){
+  const list = document.getElementById('restock-items-list');
+  if(!list) return;
+  if(!_restockItems.length){ list.innerHTML = '<div class="order-empty">無帶貨商品</div>'; return; }
+  list.innerHTML = _restockItems.map((item, idx) => `
+    <div class="order-row">
+      <div class="order-emoji">${item.emoji}</div>
+      <div class="order-info">
+        <div class="order-name">${item.name}</div>
+        <div class="order-id" style="color:var(--text2);">目前剩餘 <strong>${item.remaining}</strong> 個</div>
+      </div>
+      <div class="qty-ctrl">
+        <button class="qty-btn" onclick="restockChange(${idx},-1)">−</button>
+        <span class="qty-num" style="color:${item.addQty>0?'var(--green)':'var(--text3)'}">${item.addQty}</span>
+        <button class="qty-btn" onclick="restockChange(${idx},1)">＋</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function restockChange(idx, delta){
+  _restockItems[idx].addQty = Math.max(0, (_restockItems[idx].addQty||0)+delta);
+  _renderRestockItems();
+}
+
+function closeRestockModal(){
+  const modal = document.getElementById('restock-modal');
+  if(modal) modal.style.display = 'none';
+}
+
+function saveRestock(){
+  const ev = getEvent(_restockEventId);
+  if(!ev) return;
+  const added = _restockItems.filter(i=>i.addQty>0);
+  if(!added.length){ showToast('⚠️ 請輸入補貨數量'); return; }
+  added.forEach(r => {
+    const evItem = (ev.items||[]).find(i=>i.id===r.id);
+    if(evItem) evItem.takeQty = (evItem.takeQty||0) + r.addQty;
+  });
+  saveEvents();
+  closeRestockModal();
+  const total = added.reduce((s,i)=>s+i.addQty, 0);
+  showToast(`✅ 補貨完成！${added.length} 種商品，共 ${total} 個`);
   renderEventQuickGrid(ev);
 }
 
