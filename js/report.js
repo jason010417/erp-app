@@ -13,11 +13,17 @@ function renderSaleReport(){
   const dateFrom= document.getElementById('sr-date-from')?.value  || '';
   const dateTo  = document.getElementById('sr-date-to')?.value    || '';
 
-  let rows = logs.filter(l => l.op === 'pos_sale' || l.op === 'order_ship');
+  // 門市 POS（排除外展個別銷售，改用外展結算彙總顯示）+ 訂單出貨 + 外展結算
+  let rows = logs.filter(l =>
+    (l.op === 'pos_sale' && !l.eventId) ||
+    l.op === 'order_ship' ||
+    l.op === 'event_settle'
+  );
   if(custId)  rows = rows.filter(l => l.customerId === custId);
   if(itemQ)   rows = rows.filter(l =>
     l.productName?.toLowerCase().includes(itemQ.toLowerCase()) ||
-    l.productId?.toLowerCase().includes(itemQ.toLowerCase()));
+    l.productId?.toLowerCase().includes(itemQ.toLowerCase()) ||
+    l.eventName?.toLowerCase().includes(itemQ.toLowerCase()));
   rows = filterLogsByDate(rows, dateFrom, dateTo);
 
   const totalQty = rows.reduce((s,l)=>s+(l.qty||0),0);
@@ -30,18 +36,38 @@ function renderSaleReport(){
 
   document.getElementById('sr-list').innerHTML = rows.length
     ? rows.slice().reverse().map(l => {
-        const cust = l.customerId ? getCustomer(l.customerId) : null;
+        if(l.op === 'event_settle'){
+          const breakdown = (l.items||[]).map(i=>`${i.productName} x${i.qty}`).join('、');
+          return `<div class="inv-warn-row" style="cursor:pointer;" onclick="showEventDetail('${l.eventId}')">
+            <div style="flex:1;">
+              <div style="font-size:14px;font-weight:600;"><i class="ti ti-map-pin" style="color:var(--purple);margin-right:4px;"></i>${l.eventName||''} 外展結算</div>
+              <div style="font-size:12px;color:var(--text3);">${l.time||'—'}${breakdown?'・'+breakdown:''}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <div style="font-size:16px;font-weight:700;color:var(--purple);">${fmtMoney(l.amount||0)}</div>
+              <div style="font-size:12px;color:var(--text3);">${l.qty||0} 個</div>
+            </div>
+          </div>`;
+        }
+        const cust    = l.customerId ? getCustomer(l.customerId) : null;
+        const editBtn = l._ts
+          ? `<button style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 9px;color:var(--text2);font-size:13px;flex-shrink:0;cursor:pointer;margin-left:8px;"
+              onclick="event.stopPropagation();requireManager(()=>openEditSaleModal(${l._ts}),'修改記錄需要主管驗證')">
+              <i class="ti ti-pencil"></i>
+            </button>`
+          : '';
         return `<div class="inv-warn-row" style="cursor:default;">
-          <div>
+          <div style="flex:1;">
             <div style="font-size:14px;font-weight:600;">${l.emoji||''} ${l.productName||'—'}</div>
             <div style="font-size:12px;color:var(--text3);">
               ${cust?cust.name+' ・ ':''}${l.time||'—'}
             </div>
           </div>
-          <div style="text-align:right;">
+          <div style="text-align:right;flex-shrink:0;">
             <div style="font-size:16px;font-weight:700;color:var(--purple);">${fmtMoney(l.amount||0)}</div>
             <div style="font-size:12px;color:var(--text3);">${l.qty||0} 個</div>
           </div>
+          ${editBtn}
         </div>`;
       }).join('')
     : '<div class="order-empty">沒有符合的記錄</div>';
@@ -394,10 +420,15 @@ function clearReportFilter(type){
   else                renderPurchaseReport();
 }
 function exportSaleReport(){
-  const rows = logs.filter(l=>l.op==='pos_sale'||l.op==='order_ship');
+  const rows = logs.filter(l =>
+    (l.op==='pos_sale' && !l.eventId) || l.op==='order_ship' || l.op==='event_settle'
+  );
   if(!rows.length){ showToast('沒有記錄可匯出'); return; }
   const csv  = '時間,品項,數量,金額,客戶\n'
-    + rows.map(l => `${l.time||''},${l.productName||''},${l.qty||0},${l.amount||0},${getCustomer(l.customerId)?.name||''}`).join('\n');
+    + rows.map(l => {
+        const name = l.op==='event_settle' ? (l.eventName||'')+'外展結算' : (l.productName||'');
+        return `${l.time||''},${name},${l.qty||0},${l.amount||0},${getCustomer(l.customerId)?.name||''}`;
+      }).join('\n');
   const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');

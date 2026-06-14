@@ -255,6 +255,7 @@ function renderEventDetailPage(){
   const offState  = typeof getOfflineState==='function' ? getOfflineState(ev.id) : {};
   const isOffline = offState.offlineMode;
   const uploaded  = offState.uploaded;
+  const evLogs    = logs.filter(l => l.eventId === ev.id && l.op === 'pos_sale');
 
   page.innerHTML = `
     <div class="op-header">
@@ -333,6 +334,15 @@ function renderEventDetailPage(){
     <!-- 對帳表 -->
     <div class="section-title" style="margin-top:14px;"><i class="ti ti-clipboard-check"></i> 帶貨對帳</div>
     ${renderEventAccountTable(ev)}
+
+    <!-- 銷售記錄 -->
+    <div style="display:flex;align-items:center;gap:8px;margin-top:14px;margin-bottom:6px;">
+      <div class="section-title" style="margin:0;flex:1;"><i class="ti ti-receipt"></i> 銷售記錄</div>
+      ${evLogs.length ? `<button class="small-btn" onclick="requireManager(()=>settleEventSales('${ev.id}'),'外展結算需要主管確認')">
+        <i class="ti ti-cash"></i> 外展結算
+      </button>` : ''}
+    </div>
+    <div id="ev-detail-sales-list">${renderEventSalesSection(ev)}</div>
 
     <!-- 刪除 -->
     ${st==='upcoming' ? `
@@ -743,6 +753,76 @@ function confirmDeleteCurrentEvent(){
   deleteEvent(ev.id);
 }
 
+// ── 活動詳情頁：銷售記錄區塊 ──
+function renderEventSalesSection(ev){
+  const evLogs = logs
+    .filter(l => l.eventId === ev.id && l.op === 'pos_sale')
+    .sort((a, b) => (b._ts||0) - (a._ts||0));
+  if(!evLogs.length) return '<div class="order-empty" style="margin-bottom:10px;">尚無銷售記錄</div>';
+  return evLogs.map(l => {
+    const timeStr = l._ts
+      ? new Date(l._ts).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})
+      : l.time||'';
+    const editBtn = l._ts
+      ? `<button class="ev-rec-edit" onclick="requireManager(()=>openEditSaleModal(${l._ts}),'修改記錄需要主管驗證')"><i class="ti ti-pencil"></i></button>`
+      : '';
+    const noteEl  = l.note ? `<div style="font-size:11px;color:var(--text3);">📝 ${l.note}</div>` : '';
+    return `<div class="ev-rec-row">
+      <i class="ti ti-shopping-cart" style="color:var(--accent);font-size:18px;flex-shrink:0;"></i>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-size:14px;font-weight:600;">${l.productName||''}</span>
+          <span style="font-size:12px;color:var(--text2);">x${l.qty}  $${l.amount||(l.qty*(l.unitPrice||0))}</span>
+        </div>
+        ${noteEl}
+      </div>
+      <span style="font-size:12px;color:var(--text3);flex-shrink:0;">${timeStr}</span>
+      ${editBtn}
+    </div>`;
+  }).join('');
+}
+
+// ── 外展結算（匯總銷售到銷貨明細）──
+function settleEventSales(eventId){
+  const ev = getEvent(eventId);
+  if(!ev) return;
+  const evLogs = logs.filter(l => l.eventId === eventId && l.op === 'pos_sale');
+  if(!evLogs.length){ showToast('⚠️ 尚無銷售記錄可結算'); return; }
+  if(!confirm(`將「${ev.name}」的 ${evLogs.length} 筆銷售匯總成一筆記錄，加入銷貨明細？`)) return;
+
+  const byProduct = {};
+  evLogs.forEach(l => {
+    if(!byProduct[l.productId]){
+      byProduct[l.productId] = { productId:l.productId, productName:l.productName||'', qty:0, amount:0, unitPrice:l.unitPrice||0 };
+    }
+    byProduct[l.productId].qty    += (l.qty||0);
+    byProduct[l.productId].amount += (l.amount||0);
+  });
+  const items       = Object.values(byProduct);
+  const totalAmount = items.reduce((s,i)=>s+i.amount, 0);
+  const totalQty    = items.reduce((s,i)=>s+i.qty, 0);
+
+  addLog({
+    op:          'event_settle',
+    eventId:     ev.id,
+    eventName:   ev.name,
+    productName: ev.name,
+    qty:         totalQty,
+    amount:      totalAmount,
+    items:       items,
+    settledAt:   nowStr(),
+  });
+  showToast(`✅ 外展結算完成！共 ${totalQty} 個 ${fmtMoney(totalAmount)}，已加入銷貨明細`);
+}
+
+// 刷新活動詳情頁的銷售列表（修改/刪除後呼叫）
+function _refreshDetailSales(eventId){
+  const el = document.getElementById('ev-detail-sales-list');
+  if(!el) return;
+  const ev = getEvent(eventId);
+  if(ev) el.innerHTML = renderEventSalesSection(ev);
+}
+
 // ── 銷售/補貨記錄 Modal ──
 let _evRecordsEventId = null;
 
@@ -895,16 +975,19 @@ function closeEditSaleModal(){
 
 function saveEditSale(){
   if(!_editingLog) return;
-  const note = document.getElementById('edit-sale-note')?.value.trim() || '';
-  _editingLog.qty      = _editingQty;
-  _editingLog.amount   = _editingQty * (_editingLog.unitPrice||0);
-  _editingLog.note     = note;
+  const note    = document.getElementById('edit-sale-note')?.value.trim() || '';
+  const eventId = _editingLog.eventId;
+  _editingLog.qty       = _editingQty;
+  _editingLog.amount    = _editingQty * (_editingLog.unitPrice||0);
+  _editingLog.note      = note;
   _editingLog._editedAt = nowStr();
   saveLogs();
   if(typeof updateLogInFirebase === 'function') updateLogInFirebase(_editingLog);
   closeEditSaleModal();
   _renderEvRecordsModal();
-  const ev = getEvent(_editingLog.eventId);
+  _refreshDetailSales(eventId);
+  if(typeof renderSaleReport === 'function') renderSaleReport();
+  const ev = getEvent(eventId);
   if(ev) renderEventQuickGrid(ev);
   showToast(`✅ 已修改：${_editingLog.productName} x${_editingQty}`);
 }
@@ -920,6 +1003,8 @@ function confirmDeleteSaleLog(){
   if(fbKey && typeof deleteLogFromFirebase === 'function') deleteLogFromFirebase(fbKey);
   closeEditSaleModal();
   _renderEvRecordsModal();
+  _refreshDetailSales(eventId);
+  if(typeof renderSaleReport === 'function') renderSaleReport();
   const ev = getEvent(eventId);
   if(ev) renderEventQuickGrid(ev);
   showToast('🗑️ 記錄已刪除');
