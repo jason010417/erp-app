@@ -141,7 +141,7 @@ function showPage(name){
     'gift-orders':     () => typeof initGiftOrdersPage     === 'function' && initGiftOrdersPage(),
     'processing':      () => typeof initProcessingPage     === 'function' && initProcessingPage(),
     'transfer':        () => typeof renderTransferList     === 'function' && renderTransferList(),
-    'pos-a':           () => typeof initPOS                === 'function' && initPOS(),
+    'pos-a':           () => {},  // POS 由 startEventPOS 或直接導航時手動初始化
     'store-b-sales':   () => typeof initStoreBPage         === 'function' && initStoreBPage(),
     'events':          () => typeof renderEventList        === 'function' && renderEventList(),
     'event-detail':    () => {},
