@@ -141,6 +141,16 @@
           <span class="sb-name">贈品出庫</span>
           <span class="sb-sub">贈品/試吃</span>
         </button>
+        <button class="submenu-btn teal" onclick="initCashReconcilePage();showPage('cash-reconcile')">
+          <i class="ti ti-cash"></i>
+          <span class="sb-name">每日對帳</span>
+          <span class="sb-sub">現金核對</span>
+        </button>
+        <button class="submenu-btn purple" onclick="initSupplierReportPage();showPage('supplier-report')">
+          <i class="ti ti-building-store"></i>
+          <span class="sb-name">廠商銷售報表</span>
+          <span class="sb-sub">寄賣結算</span>
+        </button>
       </div>
     </div>
 
@@ -174,6 +184,11 @@
           <i class="ti ti-chart-line"></i>
           <span class="sb-name">進貨明細</span>
           <span class="sb-sub">查詢記錄</span>
+        </button>
+        <button class="submenu-btn amber" onclick="initExpiryPage();showPage('expiry')">
+          <i class="ti ti-calendar-event"></i>
+          <span class="sb-name">效期管理</span>
+          <span class="sb-sub">食品到期追蹤</span>
         </button>
       </div>
     </div>
@@ -587,6 +602,9 @@
     <!-- 其他頁面由各模組 JS 動態插入或使用預留容器 -->
     <div class="page" id="page-sale-report"></div>
     <div class="page" id="page-purchase-report"></div>
+    <div class="page" id="page-cash-reconcile"></div>
+    <div class="page" id="page-supplier-report"></div>
+    <div class="page" id="page-expiry"></div>
     <div class="page" id="page-finance"></div>
     <div class="page" id="page-unpaid"></div>
     <div class="page" id="page-admin-products"></div>
@@ -740,6 +758,7 @@
 <script src="js/gift.js"></script>
 <script src="js/processing.js"></script>
 <script src="js/custom_order.js"></script>
+<script src="js/expiry.js"></script>
 
 <script>
 if('serviceWorker' in navigator){

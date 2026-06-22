@@ -437,5 +437,265 @@ function exportSaleReport(){
   showToast('✅ CSV 已下載');
 }
 
+// ════════════════════════════════
+// 每日現金對帳
+// ════════════════════════════════
+
+function _loadCashRecords(){
+  return JSON.parse(localStorage.getItem('erp_cash_reconcile') || '[]');
+}
+function _saveCashRecords(arr){
+  localStorage.setItem('erp_cash_reconcile', JSON.stringify(arr));
+  if(typeof pushToFirebase === 'function') pushToFirebase('cashReconcile', arr);
+}
+
+function initCashReconcilePage(){
+  const page = document.getElementById('page-cash-reconcile');
+  if(!page) return;
+  const today = todayStr();
+  // 今日現金銷售（POS 現金 + 訂單出貨）
+  const todayCashLogs = logs.filter(l => {
+    if(l.op !== 'pos_sale' || l.eventId) return false;
+    if(l.payMethod && l.payMethod !== 'cash') return false;
+    const d = getLogDate(l);
+    if(!d) return false;
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return ds === today;
+  });
+  const expectedCash = todayCashLogs.reduce((s,l) => s + (l.amount||0), 0);
+  const records = _loadCashRecords();
+  const todayRecord = records.find(r => r.date === today);
+
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-cash" style="color:var(--green);"></i> 每日現金對帳</div>
+    </div>
+
+    <div class="form-card">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:4px;">今日（${today}）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div class="report-stat" style="background:var(--green-light);">
+          <div class="rs-num" style="color:var(--green);">${fmtMoney(expectedCash)}</div>
+          <div class="rs-label">系統現金銷售</div>
+        </div>
+        <div class="report-stat" style="background:${todayRecord?.difference<0?'var(--red-light)':'var(--surface)'};">
+          <div class="rs-num" style="color:${todayRecord?.difference<0?'var(--red)':'var(--text2)'};">
+            ${todayRecord ? fmtMoney(todayRecord.actualCash) : '—'}
+          </div>
+          <div class="rs-label">實收現金</div>
+        </div>
+      </div>
+      ${todayRecord ? `
+        <div style="padding:10px;border-radius:8px;background:${todayRecord.difference===0?'var(--green-light)':todayRecord.difference>0?'var(--blue-light)':'var(--red-light)'};margin-bottom:12px;">
+          <div style="font-size:13px;font-weight:600;">差額：
+            <span style="color:${todayRecord.difference===0?'var(--green)':todayRecord.difference>0?'var(--blue)':'var(--red)'};">
+              ${todayRecord.difference >= 0 ? '+' : ''}${fmtMoney(todayRecord.difference)}
+            </span>
+            <span style="font-size:12px;color:var(--text3);margin-left:6px;">
+              ${todayRecord.difference===0?'✅ 吻合':todayRecord.difference>0?'⬆️ 多收':'⬇️ 短收'}
+            </span>
+          </div>
+          ${todayRecord.note ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;">${todayRecord.note}</div>` : ''}
+        </div>` : ''}
+
+      <div class="cust-form">
+        <div class="cust-field">
+          <label>實收現金金額（$）</label>
+          <input type="number" id="cr-actual" placeholder="輸入實際點收金額"
+            value="${todayRecord?.actualCash ?? ''}" min="0" />
+        </div>
+        <div class="cust-field">
+          <label>備註（可選）</label>
+          <input type="text" id="cr-note" placeholder="差額說明..."
+            value="${todayRecord?.note ?? ''}" />
+        </div>
+      </div>
+      <button class="modal-ok-btn" onclick="saveCashReconcile(${expectedCash})" style="width:100%;margin-top:8px;">
+        <i class="ti ti-check"></i> 儲存今日對帳
+      </button>
+    </div>
+
+    <div class="section-title" style="margin-top:4px;"><i class="ti ti-history"></i> 歷史對帳記錄</div>
+    <div id="cr-history">${_renderCashHistory(records)}</div>`;
+}
+
+function _renderCashHistory(records){
+  if(!records.length) return '<div class="order-empty">尚無對帳記錄</div>';
+  return records.slice().reverse().slice(0,30).map(r => `
+    <div class="inv-warn-row">
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;">${r.date}</div>
+        ${r.note ? `<div style="font-size:12px;color:var(--text3);">${r.note}</div>` : ''}
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:13px;color:var(--text2);">系統 ${fmtMoney(r.expectedCash)} / 實收 ${fmtMoney(r.actualCash)}</div>
+        <div style="font-size:14px;font-weight:700;color:${r.difference===0?'var(--green)':r.difference>0?'var(--blue)':'var(--red)'};">
+          差額 ${r.difference>=0?'+':''}${fmtMoney(r.difference)}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function saveCashReconcile(expectedCash){
+  const actual = parseInt(document.getElementById('cr-actual')?.value) || 0;
+  const note   = document.getElementById('cr-note')?.value.trim() || '';
+  const today  = todayStr();
+  const records = _loadCashRecords();
+  const idx    = records.findIndex(r => r.date === today);
+  const entry  = { date: today, expectedCash, actualCash: actual, difference: actual - expectedCash, note };
+  if(idx >= 0) records[idx] = entry;
+  else records.push(entry);
+  _saveCashRecords(records);
+  showToast(`✅ 對帳已儲存！差額 ${entry.difference >= 0 ? '+' : ''}${fmtMoney(entry.difference)}`);
+  initCashReconcilePage();
+}
+window.saveCashReconcile = saveCashReconcile;
+
+// ════════════════════════════════
+// 廠商銷售報表（寄賣結算）
+// ════════════════════════════════
+
+function initSupplierReportPage(){
+  const page = document.getElementById('page-supplier-report');
+  if(!page) return;
+  page.innerHTML = `
+    <div class="op-header">
+      <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
+      <div class="op-title"><i class="ti ti-building-store" style="color:var(--purple);"></i> 廠商銷售報表</div>
+      <button class="small-btn" onclick="exportSupplierReport()"><i class="ti ti-download"></i> 匯出</button>
+    </div>
+    <div class="form-card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="cust-field"><label>廠商</label>
+          <select id="spr-supplier" onchange="renderSupplierReport()">
+            <option value="">全部廠商</option>
+            ${SUPPLIERS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="cust-field"><label>合作方式</label>
+          <select id="spr-type" onchange="renderSupplierReport()">
+            <option value="">全部</option>
+            <option value="consignment">僅寄賣</option>
+          </select>
+        </div>
+        <div class="cust-field"><label>開始日期</label>
+          <input type="date" id="spr-date-from" onchange="renderSupplierReport()" /></div>
+        <div class="cust-field"><label>結束日期</label>
+          <input type="date" id="spr-date-to" onchange="renderSupplierReport()" /></div>
+      </div>
+    </div>
+    <div id="spr-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;"></div>
+    <div id="spr-list"></div>`;
+  renderSupplierReport();
+}
+
+function renderSupplierReport(){
+  const supFilter  = document.getElementById('spr-supplier')?.value || '';
+  const typeFilter = document.getElementById('spr-type')?.value || '';
+  const dateFrom   = document.getElementById('spr-date-from')?.value || '';
+  const dateTo     = document.getElementById('spr-date-to')?.value || '';
+
+  // POS 銷售 + 訂單出貨
+  let rows = logs.filter(l =>
+    (l.op === 'pos_sale' && !l.eventId) || l.op === 'order_ship'
+  );
+  rows = filterLogsByDate(rows, dateFrom, dateTo);
+
+  // 按廠商分組
+  const bySupplier = {};
+  rows.forEach(l => {
+    const item = getItem ? getItem(l.productId) : null;
+    if(!item) return;
+    const supId = item.supplierId || 'unknown';
+    if(supFilter && supId !== supFilter) return;
+    const sup = SUPPLIERS.find(s => s.id === supId);
+    const extra = sup ? JSON.parse(localStorage.getItem('erp_sup_' + supId) || '{}') : {};
+    if(typeFilter === 'consignment' && extra.consignmentType !== 'consignment') return;
+    if(!bySupplier[supId]) bySupplier[supId] = { sup, extra, items: [], totalAmt: 0, totalQty: 0 };
+    bySupplier[supId].items.push(l);
+    bySupplier[supId].totalAmt += (l.amount||0);
+    bySupplier[supId].totalQty += (l.qty||0);
+  });
+
+  const groups = Object.values(bySupplier).sort((a,b) => b.totalAmt - a.totalAmt);
+  const grandTotal = groups.reduce((s,g) => s + g.totalAmt, 0);
+  const grandQty   = groups.reduce((s,g) => s + g.totalQty, 0);
+
+  const statsEl = document.getElementById('spr-stats');
+  if(statsEl) statsEl.innerHTML = `
+    <div class="report-stat"><div class="rs-num">${groups.length}</div><div class="rs-label">廠商數</div></div>
+    <div class="report-stat"><div class="rs-num">${grandQty}</div><div class="rs-label">總數量</div></div>
+    <div class="report-stat"><div class="rs-num" style="color:var(--purple);">${fmtMoney(grandTotal)}</div><div class="rs-label">總銷售額</div></div>`;
+
+  const listEl = document.getElementById('spr-list');
+  if(!listEl) return;
+  if(!groups.length){ listEl.innerHTML = '<div class="order-empty">沒有符合的記錄</div>'; return; }
+
+  listEl.innerHTML = groups.map(g => {
+    const supName = g.sup?.name || g.items[0]?.supplierId || '未知廠商';
+    const isConsignment = g.extra?.consignmentType === 'consignment';
+    // 依品項彙總
+    const itemMap = {};
+    g.items.forEach(l => {
+      if(!itemMap[l.productId]) itemMap[l.productId] = { name: l.productName, emoji: l.emoji||'', qty:0, amt:0 };
+      itemMap[l.productId].qty += (l.qty||0);
+      itemMap[l.productId].amt += (l.amount||0);
+    });
+    const itemRows = Object.values(itemMap).sort((a,b) => b.amt - a.amt);
+    return `<div class="list-card" style="margin-bottom:12px;">
+      <div class="list-card-top">
+        <span class="list-card-no">${supName}</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${isConsignment ? `<span class="status-badge badge-pending" style="font-size:10px;">寄賣</span>` : ''}
+          <span style="font-weight:700;color:var(--purple);">${fmtMoney(g.totalAmt)}</span>
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        ${itemRows.map(it => `
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:13px;">
+            <span>${it.emoji} ${it.name}</span>
+            <span style="color:var(--text2);">×${it.qty} &nbsp; ${fmtMoney(it.amt)}</span>
+          </div>`).join('')}
+      </div>
+      ${isConsignment ? `
+        <div style="margin-top:8px;padding:6px 10px;background:var(--amber-light,#fff8e6);border-radius:6px;font-size:12px;color:var(--amber-dark,#8a5e00);">
+          <i class="ti ti-receipt"></i> 寄賣應付：<strong>${fmtMoney(g.totalAmt)}</strong>（需依合約比例計算）
+        </div>` : ''}
+    </div>`;
+  }).join('');
+}
+window.renderSupplierReport = renderSupplierReport;
+
+function exportSupplierReport(){
+  const dateFrom = document.getElementById('spr-date-from')?.value || '';
+  const dateTo   = document.getElementById('spr-date-to')?.value || '';
+  let rows = logs.filter(l =>
+    (l.op === 'pos_sale' && !l.eventId) || l.op === 'order_ship'
+  );
+  rows = filterLogsByDate(rows, dateFrom, dateTo);
+
+  const csvRows = [['廠商ID','廠商名稱','合作方式','商品ID','商品名稱','數量','金額','時間']];
+  rows.forEach(l => {
+    const item  = getItem ? getItem(l.productId) : null;
+    const supId = item?.supplierId || '';
+    const sup   = SUPPLIERS.find(s => s.id === supId);
+    const extra = sup ? JSON.parse(localStorage.getItem('erp_sup_' + supId) || '{}') : {};
+    csvRows.push([
+      supId, sup?.name||'', extra.consignmentType==='consignment'?'寄賣':'買斷',
+      l.productId||'', l.productName||'', l.qty||0, l.amount||0, l.time||''
+    ]);
+  });
+
+  const csv  = csvRows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download=`廠商銷售報表_${todayStr()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ CSV 已下載');
+}
+window.exportSupplierReport = exportSupplierReport;
+
 // 初始化（每次進入頁面時）
 document.addEventListener('DOMContentLoaded', ()=>{});

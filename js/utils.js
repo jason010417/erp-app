@@ -155,6 +155,8 @@ function showPage(name){
     'admin-locations': () => typeof initLocationPage       === 'function' && initLocationPage(),
     'admin-import':    () => typeof initImportPage         === 'function' && initImportPage(),
     'production':      () => typeof renderProductionList   === 'function' && renderProductionList('all'),
+    'cash-reconcile':  () => typeof initCashReconcilePage  === 'function' && initCashReconcilePage(),
+    'supplier-report': () => typeof initSupplierReportPage === 'function' && initSupplierReportPage(),
   };
   if(initMap[name]) initMap[name]();
 }

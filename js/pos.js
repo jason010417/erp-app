@@ -34,6 +34,12 @@ function initPOS(eventId){
   if(banner) banner.style.display = _posEventId ? 'block' : 'none';
 }
 
+// 取得供應商附加資訊（故事、寄賣等）
+function getSupplierExtra(supplierId){
+  if(!supplierId) return {};
+  return JSON.parse(localStorage.getItem('erp_sup_' + supplierId) || '{}');
+}
+
 // ── 加入商品 ──
 function addPOSItem(productId){
   const item = getItem(productId);
@@ -60,6 +66,7 @@ function addPOSItem(productId){
   if(existing){
     existing.qty++;
   } else {
+    const supExtra = getSupplierExtra(item.supplierId);
     _posCart.push({
       id:            productId,
       name:          item.name,
@@ -67,6 +74,8 @@ function addPOSItem(productId){
       qty:           1,
       originalPrice: item.salePrice,
       unitPrice:     item.salePrice,
+      supplierId:    item.supplierId || null,
+      story:         supExtra.story || '',
     });
   }
   renderCart();
@@ -106,6 +115,33 @@ function changePOSItemPrice(idx, val){
   calcPOSTotal();
 }
 
+function showPOSStory(idx){
+  const item = _posCart[idx];
+  if(!item?.story) return;
+  const sup = typeof SUPPLIERS !== 'undefined' ? SUPPLIERS.find(s => s.id === item.supplierId) : null;
+  const title = sup ? sup.name : '工廠故事';
+  // 動態建立故事 Modal
+  let overlay = document.getElementById('pos-story-modal');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'pos-story-modal';
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'display:none;';
+    overlay.onclick = e => { if(e.target === overlay) overlay.style.display = 'none'; };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="modal-card" style="max-width:340px;">
+      <div class="modal-title"><i class="ti ti-book" style="color:var(--purple);"></i> 📖 ${title}</div>
+      <p style="font-size:14px;line-height:1.7;color:var(--text);white-space:pre-wrap;margin:0 0 16px;">${item.story}</p>
+      <button class="modal-ok-btn" onclick="document.getElementById('pos-story-modal').style.display='none'">
+        <i class="ti ti-check"></i> 關閉
+      </button>
+    </div>`;
+  overlay.style.display = 'flex';
+}
+window.showPOSStory = showPOSStory;
+
 function clearPOS(){
   _posCart = [];
   renderCart();
@@ -125,10 +161,17 @@ function renderCart(){
   }
   el.innerHTML = _posCart.map((item, idx) => {
     const isDis = item.unitPrice !== item.originalPrice;
+    const safeStory = item.story ? item.story.replace(/'/g, '&#39;').replace(/"/g, '&quot;') : '';
+    const storyBtn = item.story
+      ? `<button class="qty-btn" title="${safeStory}"
+           onclick="showPOSStory(${idx})" style="color:var(--purple);font-size:13px;">
+           <i class="ti ti-info-circle"></i>
+         </button>`
+      : '';
     return `<div class="order-row">
       <div class="order-emoji">${item.emoji}</div>
       <div class="order-info">
-        <div class="order-name">${item.name}</div>
+        <div class="order-name">${item.name}${storyBtn}</div>
         <div class="order-id" style="display:flex;align-items:center;gap:6px;">
           ${isDis?`<span style="text-decoration:line-through;color:var(--text3);font-size:11px;">$${item.originalPrice}</span>`:''}
           <input type="number" class="unit-price-input ${isDis?'discounted':''}"
