@@ -61,7 +61,7 @@ function getLogsByDateRange(from, to){
 }
 
 // ── 銷售記錄查詢（報表用）──
-const SALE_OPS     = ['pos_sale', 'order_ship', 'event_sale'];
+const SALE_OPS     = ['pos_sale', 'order_ship', 'event_sale', 'event_settle'];
 const PURCHASE_OPS = ['stock_in', 'purchase'];
 const PRODUCE_OPS  = ['produce', 'produce_deduct'];
 

@@ -386,39 +386,32 @@ function advanceProdStatus(id){
   p.statusLog = p.statusLog || [];
   p.statusLog.push({ status:next.key, label:next.label, time:now, note:'' });
 
-  // 完成時：BOM 扣料，成品入庫
+  let orderSynced = false;
+
+  // 完成時：BOM 扣料，成品入庫，並同步訂單狀態
   if(next.key === 'done'){
     const locId = getMainLocation()?.id || 'store_A';
     p.items.forEach(item => {
       const bom = BOM[item.id] || [];
-      // 扣半成品和包材
       bom.forEach(b => {
-        const deduct = b.qty * item.qty;
-        adjustStock(b.materialId, locId, -deduct, {
-          op:      'produce_deduct',
-          refId:   p.id,
-          refType: 'production',
-          note:    `生產 ${item.name} x${item.qty}`,
+        adjustStock(b.materialId, locId, -(b.qty * item.qty), {
+          op:'produce_deduct', refId:p.id, refType:'production',
+          note:`生產 ${item.name} x${item.qty}`,
         });
       });
-      // 成品入庫
       adjustStock(item.id, locId, item.qty, {
-        op:      'produce',
-        refId:   p.id,
-        refType: 'production',
-        note:    `生產完成入庫`,
+        op:'produce', refId:p.id, refType:'production', note:'生產完成入庫',
       });
     });
-    showToast('✅ 生產完成！成品已入庫');
-    // 更新對應訂單狀態 → 待出貨
     if(p.sourceOrderId){
       const ord = getOrder(p.sourceOrderId);
       if(ord && ord.status === 'producing'){
         ord.status    = 'ready';
         ord.updatedAt = todayStr();
-        const idx = orders.findIndex(o => o.id === ord.id);
-        if(idx >= 0) orders[idx] = ord;
+        const oidx = orders.findIndex(o => o.id === ord.id);
+        if(oidx >= 0) orders[oidx] = ord;
         saveOrders();
+        orderSynced = true;
       }
     }
   }
@@ -429,7 +422,11 @@ function advanceProdStatus(id){
   _currentProd = JSON.parse(JSON.stringify(p));
   renderProdDetailPage();
   renderProductionList(_prodFilter);
-  showToast(`✅ 狀態已更新為「${next.label}」`);
+  if(next.key === 'done'){
+    showToast('✅ 生產完成！成品已入庫' + (orderSynced ? '，訂單已更新為待出貨' : ''));
+  } else {
+    showToast(`✅ 狀態已更新為「${next.label}」`);
+  }
 }
 
 // ── 管理員永久刪除生產單 ──

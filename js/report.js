@@ -19,7 +19,7 @@ function renderSaleReport(){
     l.op === 'order_ship' ||
     l.op === 'event_settle'
   );
-  if(custId)  rows = rows.filter(l => l.customerId === custId);
+  if(custId)  rows = rows.filter(l => l.customerId === custId || l.op === 'event_settle');
   if(itemQ)   rows = rows.filter(l =>
     l.productName?.toLowerCase().includes(itemQ.toLowerCase()) ||
     l.productId?.toLowerCase().includes(itemQ.toLowerCase()) ||

@@ -238,7 +238,7 @@ function saveEvent(){
 // ── 外展詳細 ──
 function showEventDetail(id){
   const ev = getEvent(id);
-  if(!ev) return;
+  if(!ev){ showToast('⚠️ 找不到此外展活動（可能已被刪除）'); return; }
   _currentEvent = JSON.parse(JSON.stringify(ev));
   renderEventDetailPage();
   showPage('event-detail');
@@ -731,6 +731,11 @@ function submitEventUpload(){
 function deleteEvent(id){
   events = events.filter(e=>e.id!==id);
   saveEvents();
+  // 清除該活動的所有孤兒 log（pos_sale + ev_restock + event_settle）
+  const orphanKeys = logs.filter(l=>l.eventId===id).map(l=>l._fbKey).filter(Boolean);
+  logs = logs.filter(l=>l.eventId!==id);
+  saveLogs();
+  orphanKeys.forEach(k => { if(typeof deleteLogFromFirebase==='function') deleteLogFromFirebase(k); });
   showToast('🗑️ 外展活動已刪除');
   showPage('events');
 }
@@ -788,7 +793,13 @@ function settleEventSales(eventId){
   if(!ev) return;
   const evLogs = logs.filter(l => l.eventId === eventId && l.op === 'pos_sale');
   if(!evLogs.length){ showToast('⚠️ 尚無銷售記錄可結算'); return; }
-  if(!confirm(`將「${ev.name}」的 ${evLogs.length} 筆銷售匯總成一筆記錄，加入銷貨明細？`)) return;
+  // 防止重複結算
+  const prevSettle = logs.find(l => l.op === 'event_settle' && l.eventId === eventId);
+  if(prevSettle){
+    if(!confirm(`「${ev.name}」已有一筆結算記錄（${prevSettle.time}）。\n確定要再新增一筆嗎？`)) return;
+  } else {
+    if(!confirm(`將「${ev.name}」的 ${evLogs.length} 筆銷售匯總成一筆記錄，加入銷貨明細？`)) return;
+  }
 
   const byProduct = {};
   evLogs.forEach(l => {
@@ -971,34 +982,44 @@ function editSaleQtyInput(val){
 function closeEditSaleModal(){
   const modal = document.getElementById('ev-edit-sale-modal');
   if(modal) modal.style.display = 'none';
+  _editingLog = null;
+  _editingQty = 0;
 }
 
 function saveEditSale(){
   if(!_editingLog) return;
-  const note    = document.getElementById('edit-sale-note')?.value.trim() || '';
-  const eventId = _editingLog.eventId;
+  const note        = document.getElementById('edit-sale-note')?.value.trim() || '';
+  const eventId     = _editingLog.eventId;
+  const productName = _editingLog.productName;
+  const savedQty    = _editingQty;
   _editingLog.qty       = _editingQty;
   _editingLog.amount    = _editingQty * (_editingLog.unitPrice||0);
   _editingLog.note      = note;
   _editingLog._editedAt = nowStr();
   saveLogs();
-  if(typeof updateLogInFirebase === 'function') updateLogInFirebase(_editingLog);
-  closeEditSaleModal();
+  if(_editingLog._fbKey){
+    if(typeof updateLogInFirebase === 'function') updateLogInFirebase(_editingLog);
+  } else {
+    // 尚未推送到 Firebase 的離線記錄，補推一次
+    if(typeof pushLogToFirebase === 'function') pushLogToFirebase(_editingLog);
+  }
+  closeEditSaleModal(); // 此後 _editingLog = null
   _renderEvRecordsModal();
   _refreshDetailSales(eventId);
   if(typeof renderSaleReport === 'function') renderSaleReport();
   const ev = getEvent(eventId);
   if(ev) renderEventQuickGrid(ev);
-  showToast(`✅ 已修改：${_editingLog.productName} x${_editingQty}`);
+  showToast(`✅ 已修改：${productName} x${savedQty}`);
 }
 
 function confirmDeleteSaleLog(){
   if(!_editingLog) return;
   if(!confirm(`確定要刪除「${_editingLog.productName}」這筆銷售記錄嗎？`)) return;
-  const ts      = _editingLog._ts;
   const fbKey   = _editingLog._fbKey;
   const eventId = _editingLog.eventId;
-  logs = logs.filter(l => l._ts !== ts);
+  // 用物件參照精確定位，避免 _ts 碰撞誤刪其他記錄
+  const logIdx = logs.indexOf(_editingLog);
+  if(logIdx >= 0) logs.splice(logIdx, 1);
   saveLogs();
   if(fbKey && typeof deleteLogFromFirebase === 'function') deleteLogFromFirebase(fbKey);
   closeEditSaleModal();
