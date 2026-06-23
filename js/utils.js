@@ -155,6 +155,7 @@ function showPage(name){
     'admin-locations': () => typeof initLocationPage       === 'function' && initLocationPage(),
     'admin-import':    () => typeof initImportPage         === 'function' && initImportPage(),
     'production':      () => typeof renderProductionList   === 'function' && renderProductionList('all'),
+    'exam-plan':       () => typeof initExamPlanPage       === 'function' && initExamPlanPage(),
   };
   if(initMap[name]) initMap[name]();
 }
