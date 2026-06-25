@@ -44,10 +44,9 @@ function initPurchasePage(){
   if(!el) return;
   el.innerHTML = `
     <div class="filter-tabs" style="margin:-4px -4px 10px;">
-      <button class="ftab active" onclick="renderPurchaseList('all')">全部</button>
+      <button class="ftab active" onclick="renderPurchaseList('active')">進行中</button>
       <button class="ftab" onclick="renderPurchaseList('draft')">草稿</button>
       <button class="ftab" onclick="renderPurchaseList('ordered')">待收貨</button>
-      <button class="ftab" onclick="renderPurchaseList('received')">已入庫</button>
       <button class="ftab" onclick="renderPurchaseList('unpaid')">未付款</button>
     </div>
     <div id="purchase-list-container"></div>
@@ -55,26 +54,26 @@ function initPurchasePage(){
       onclick="newPurchase()">
       <i class="ti ti-plus"></i> 新增採購單
     </button>`;
-  renderPurchaseList('all');
+  renderPurchaseList('active');
 }
 
 function renderPurchaseList(filter){
-  _puFilter = filter || 'all';
+  _puFilter = filter || 'active';
   const tabs    = document.querySelectorAll('#purchase-content .ftab');
-  const filters = ['all','draft','ordered','received','unpaid'];
+  const filters = ['active','draft','ordered','unpaid'];
   tabs.forEach((btn, i) => btn.classList.toggle('active', filters[i] === _puFilter));
 
   const el = document.getElementById('purchase-list-container');
   if(!el) return;
 
   let list = [...purchases].reverse();
-  if(_puFilter === 'unpaid'){
+  if(_puFilter === 'active'){
+    list = list.filter(p => p.status === 'draft' || p.status === 'ordered');
+  } else if(_puFilter === 'unpaid'){
     list = list.filter(p =>
       (p.status === 'ordered' || p.status === 'received' || p.status === 'completed')
       && p.payStatus !== 'paid'
     );
-  } else if(_puFilter === 'received'){
-    list = list.filter(p => p.status === 'received' || p.status === 'completed');
   } else if(_puFilter !== 'all'){
     list = list.filter(p => p.status === _puFilter);
   }
@@ -654,8 +653,55 @@ function hardDeletePurchase(id){
   showPage('purchase');
 }
 
-// ── 舊版相容（report.js 呼叫）──
-function renderPurchaseHistory(){}
+// ── 進貨單歷史查詢（管理區）──
+function renderPurchaseHistory(){
+  const from = document.getElementById('pu-hist-from')?.value || '';
+  const to   = document.getElementById('pu-hist-to')?.value   || '';
+  const kw   = (document.getElementById('pu-hist-kw')?.value  || '').trim().toLowerCase();
+  const el   = document.getElementById('pu-hist-list');
+  if(!el) return;
+
+  let list = purchases.filter(p =>
+    p.status === 'received' || p.status === 'completed' || p.status === 'cancelled'
+  ).slice().reverse();
+
+  if(from) list = list.filter(p => (p.createdAt || '') >= from);
+  if(to)   list = list.filter(p => (p.createdAt || '') <= to);
+  if(kw)   list = list.filter(p =>
+    (p.no || '').toLowerCase().includes(kw) ||
+    (SUPPLIERS.find(s => s.id === p.supplierId)?.name || '').toLowerCase().includes(kw) ||
+    (p.items || []).some(i => i.name.toLowerCase().includes(kw))
+  );
+
+  if(!list.length){
+    el.innerHTML = '<div class="order-empty">沒有符合的歷史採購單</div>'; return;
+  }
+
+  el.innerHTML = list.map(pu => {
+    const sup      = SUPPLIERS.find(s => s.id === pu.supplierId);
+    const itemsStr = (pu.items||[]).slice(0,2).map(i=>i.name).join('、')
+      + ((pu.items||[]).length > 2 ? ` 等${pu.items.length}項` : '');
+    return `<div class="list-card" onclick="showPurchaseDetail('${pu.id}')">
+      <div class="list-card-top">
+        <span class="list-card-no">${pu.no}</span>
+        <div style="display:flex;gap:6px;">
+          ${puStatusBadge(pu.status)}
+          ${puPayBadge(pu.payStatus)}
+        </div>
+      </div>
+      <div class="list-card-meta">
+        ${sup ? `<span><i class="ti ti-building-store"></i>${sup.name}</span>` : ''}
+        <span><i class="ti ti-calendar"></i>${fmtDate(pu.createdAt)}</span>
+        ${pu.receivedAt ? `<span><i class="ti ti-circle-check"></i>入庫 ${fmtDate(pu.receivedAt)}</span>` : ''}
+      </div>
+      <div class="list-card-items">${itemsStr || '無品項'}</div>
+      <div class="list-card-footer">
+        <span class="list-card-amount">${fmtMoney(pu.totalCost||0)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function confirmPurchase(){ showToast('請使用新版採購單流程'); }
 
 // ── 初始化 ──
