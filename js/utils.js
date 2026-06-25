@@ -47,8 +47,10 @@ function genNo(prefix, existingList, noField = 'no'){
   const d  = new Date();
   const ym = String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, '0');
   const pre = `${prefix}${ym}-`;
-  const same = (existingList || []).filter(x => x[noField]?.startsWith(pre)).length;
-  return pre + String(same + 1).padStart(3, '0');
+  const maxSeq = (existingList || [])
+    .map(x => x[noField]?.startsWith(pre) ? (parseInt(x[noField].slice(pre.length)) || 0) : 0)
+    .reduce((a, b) => Math.max(a, b), 0);
+  return pre + String(maxSeq + 1).padStart(3, '0');
 }
 
 // ── 格式化金額 ──

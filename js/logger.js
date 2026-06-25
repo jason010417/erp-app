@@ -24,6 +24,9 @@ function addLog(data){
     _ts:        Date.now(),
     _device:    typeof DEVICE_ID !== 'undefined' ? DEVICE_ID : 'unknown',
     time:       nowStr(),
+    // _date 存 YYYY-MM-DD 格式，供 getLogsByDateRange() 做跨年正確比對
+    // 舊記錄沒有 _date，getLogsByDateRange() 會 fallback 到原本的補年邏輯
+    _date:      todayStr(),
     role:       currentRole() || 'operator',
     ...data,
   };
@@ -49,11 +52,22 @@ function getLogsByProduct(productId){
 }
 function getLogsByDateRange(from, to){
   return logs.filter(l => {
-    if(!l.time) return false;
-    const parts = l.time.match(/(\d+)\/(\d+)/);
-    if(!parts) return false;
-    const year = new Date().getFullYear();
-    const ds = `${year}-${String(parts[1]).padStart(2,'0')}-${String(parts[2]).padStart(2,'0')}`;
+    // 優先使用 _date 欄位（YYYY-MM-DD 格式），新記錄都有這個欄位，可正確跨年比對
+    // 若 _date 不存在（舊記錄），fallback 到原本的邏輯：
+    //   從 time 欄位（格式 M/D HH:MM）解析月日，補上當前年份
+    //   缺點：跨年查詢 12 月記錄時年份會被補成今年，可能造成資料漏查
+    let ds;
+    if(l._date){
+      // 新記錄：直接用 _date（YYYY-MM-DD），跨年也能正確比對
+      ds = l._date;
+    } else {
+      // 舊記錄 fallback：解析 time 欄位補年份
+      if(!l.time) return false;
+      const parts = l.time.match(/(\d+)\/(\d+)/);
+      if(!parts) return false;
+      const year = new Date().getFullYear();
+      ds = `${year}-${String(parts[1]).padStart(2,'0')}-${String(parts[2]).padStart(2,'0')}`;
+    }
     if(from && ds < from) return false;
     if(to   && ds > to)   return false;
     return true;

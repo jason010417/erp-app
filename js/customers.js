@@ -151,6 +151,17 @@ function showCustomerDetail(id){
 
 function deleteCustomer(id){
   requireManager(() => {
+    // 刪除前先檢查此客戶是否有未結案訂單
+    // 若有，刪除後訂單卡片的客戶名稱會消失，帳目會不清楚
+    // orders 為 orders.js 中的全域陣列，透過 window.orders 存取以避免命名衝突
+    const hasOrders = (window.orders || []).filter(o =>
+      o.customerId === id && o.status !== 'archived'
+    ).length > 0;
+    if(hasOrders){
+      showToast('⚠️ 此客戶有未結案訂單，請先結案後再刪除');
+      return;
+    }
+
     if(!confirm('確定刪除此客戶？')) return;
     customers = customers.filter(c => c.id !== id);
     saveCustomers();

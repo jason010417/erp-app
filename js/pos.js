@@ -151,7 +151,11 @@ function renderCart(){
 function calcPOSTotal(){
   const subtotal  = _posCart.reduce((s,i) => s + i.unitPrice * i.qty, 0);
   const discType  = document.getElementById('pos-discount-type')?.value  || 'none';
-  const discValue = parseInt(document.getElementById('pos-discount-value')?.value) || 0;
+  let discValue   = parseInt(document.getElementById('pos-discount-value')?.value) || 0;
+
+  // 百分比折扣限制在 0~100 之間，避免輸入超過 100% 導致總金額變成負數
+  if(discType === 'percent') discValue = Math.min(100, Math.max(0, discValue));
+
   let total = subtotal;
   if(discType==='percent') total = Math.round(subtotal*(1-discValue/100));
   if(discType==='amount')  total = Math.max(0, subtotal-discValue);
@@ -236,24 +240,82 @@ function confirmPOS(){
     onEventSale(_posEventId, _posCart);
   }
 
-  showToast(`✅ 收款完成！${fmtMoney(total)}`);
-  showReceipt(total);
+  // 在清空購物車之前，先把購物車快照傳給 showReceipt，
+  // 確保收據內的品項明細是這筆交易的資料，而非清空後的空陣列
+  showReceipt(total, _posCart.slice());
   _posCart = [];
   renderCart();
   calcPOSTotal();
 }
 
-// ── 收據（簡易）──
-function showReceipt(total){
+// ── 收據 Modal ──
+// 參數說明：
+//   total    — 應收總金額（Number）
+//   cartItems — 購物車快照陣列（Array），由 confirmPOS() 在清空前傳入
+//               這樣即使 _posCart 已被清空，收據仍能正確顯示品項明細
+function showReceipt(total, cartItems){
   const cashReceived = parseInt(document.getElementById('pos-cash-received')?.value) || 0;
   const change       = Math.max(0, cashReceived - total);
-  const lines        = _posCart.map(i =>
-    `${i.emoji} ${i.name} x${i.qty}  ${fmtMoney(i.unitPrice*i.qty)}`
-  ).join('\n');
-  const msg = `✅ 收款完成\n\n${lines}\n\n總計：${fmtMoney(total)}` +
-    (_posPayMethod==='cash' && cashReceived ? `\n收款：${fmtMoney(cashReceived)}\n找零：${fmtMoney(change)}` : '');
-  // 簡易 Toast 就夠了，未來可改成正式收據頁面
-  setTimeout(() => showToast('🧾 ' + fmtMoney(total) + ' 已記錄'), 500);
+
+  // 建立品項明細列（HTML 格式，每項一行）
+  const itemRows = (cartItems || []).map(i => `
+    <div style="display:flex;justify-content:space-between;align-items:center;
+      padding:7px 0;border-bottom:1px solid var(--border);font-size:14px;">
+      <span>${i.emoji} ${i.name} <span style="color:var(--text3);">x${i.qty}</span></span>
+      <span style="font-weight:600;">${fmtMoney(i.unitPrice * i.qty)}</span>
+    </div>`).join('');
+
+  // 找零區塊（只在現金付款且有輸入收款金額時才顯示）
+  const changeBlock = (_posPayMethod === 'cash' && cashReceived > 0) ? `
+    <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:var(--text2);">
+      <span>收款</span><span>${fmtMoney(cashReceived)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:var(--text2);">
+      <span>找零</span><span style="color:var(--green);font-weight:600;">${fmtMoney(change)}</span>
+    </div>` : '';
+
+  // 動態建立收據 Modal（風格與其他模組的 modal-overlay 一致）
+  const existing = document.getElementById('pos-receipt-modal');
+  if(existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id        = 'pos-receipt-modal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-card" style="padding:0;overflow:hidden;max-width:340px;width:92%;">
+      <!-- 標題列 -->
+      <div style="display:flex;align-items:center;gap:8px;padding:16px 18px 12px;
+        border-bottom:1px solid var(--border);background:var(--green);color:#fff;">
+        <i class="ti ti-receipt" style="font-size:22px;"></i>
+        <div style="flex:1;font-size:17px;font-weight:700;">收款完成</div>
+        <button onclick="document.getElementById('pos-receipt-modal').remove()"
+          style="background:none;border:none;font-size:22px;color:rgba(255,255,255,0.8);
+          cursor:pointer;line-height:1;"><i class="ti ti-x"></i></button>
+      </div>
+      <!-- 品項明細 -->
+      <div style="padding:12px 16px;">
+        ${itemRows || '<div style="color:var(--text3);text-align:center;padding:12px;">（無品項資料）</div>'}
+      </div>
+      <!-- 合計區 -->
+      <div style="padding:10px 16px 4px;border-top:2px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;
+          padding:6px 0;font-size:18px;font-weight:700;">
+          <span>總計</span>
+          <span style="color:var(--green);">${fmtMoney(total)}</span>
+        </div>
+        ${changeBlock}
+      </div>
+      <!-- 關閉按鈕 -->
+      <div style="padding:12px 16px 16px;">
+        <button class="confirm-btn" style="background:var(--green);"
+          onclick="document.getElementById('pos-receipt-modal').remove()">
+          <i class="ti ti-check"></i> 確認
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.style.display = 'flex';
 }
 
 document.addEventListener('DOMContentLoaded', () => {

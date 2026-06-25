@@ -185,13 +185,18 @@ function newOrderFromEstimate(estimate){
 
   _currentOrder = o;
 
-  // 標記估價單為已轉單（先記錄，轉單後才能在估價單看到連結）
+  // 注意：此處「不」提前儲存估價單狀態
+  // 原因：訂單此時尚無 id 也未寫入 localStorage，若使用者中途離開，
+  //       估價單會永遠停在 'converted' 但對應訂單不存在，形成孤兒資料。
+  // 正確做法：等 upsertOrder() 將訂單存入後，再由 upsertOrder() 內部
+  //           更新估價單的 convertedOrderId，同步呼叫 saveEstimates()。
+  // 這裡只在記憶體暫存，不呼叫 saveEstimates()。
   const est = typeof estimates !== 'undefined' ? estimates.find(e => e.id === estimate.id) : null;
   if(est){
     est.status           = 'converted';
-    est.convertedOrderId = null; // 先設 null，存檔後再更新
+    est.convertedOrderId = null; // 佔位，upsertOrder() 執行後才會填入真正的 id
     est.convertedOrderNo = o.no;
-    if(typeof saveEstimates === 'function') saveEstimates();
+    // 不在這裡呼叫 saveEstimates()，避免訂單未存入就先標記估價單
   }
 
   renderOrderEditPage();
@@ -620,7 +625,11 @@ function calcOrderTotal(){
   if(!_currentOrder) return;
   const subtotal  = _currentOrder.items.reduce((s,i) => s + i.unitPrice * i.qty, 0);
   const discType  = document.getElementById('ord-discount-type')?.value  || 'none';
-  const discValue = parseInt(document.getElementById('ord-discount-value')?.value) || 0;
+  let discValue   = parseInt(document.getElementById('ord-discount-value')?.value) || 0;
+
+  // 百分比折扣限制在 0~100 之間，避免輸入超過 100% 導致訂單總金額變成負數
+  if(discType === 'percent') discValue = Math.min(100, Math.max(0, discValue));
+
   let total       = subtotal;
   if(discType === 'percent') total = Math.round(subtotal * (1 - discValue/100));
   if(discType === 'amount')  total = Math.max(0, subtotal - discValue);
@@ -638,12 +647,36 @@ function calcOrderTotal(){
 // ── 付款狀態 ──
 function setOrderPayStatus(status){
   if(!_currentOrder) return;
+
+  // 更新記憶體中的付款狀態
   _currentOrder.payStatus = status;
+
+  // 更新 DOM：切換三個按鈕的 active 樣式
   ['unpaid','partial','paid'].forEach(s => {
     document.getElementById(`ord-pay-${s}`)?.classList.toggle('active', s === status);
   });
+
+  // 控制「已收金額」欄位的顯示（只有「部分收款」才顯示）
   const partialRow = document.getElementById('ord-partial-row');
   if(partialRow) partialRow.style.display = status === 'partial' ? 'flex' : 'none';
+
+  // 立即持久化到 localStorage / Firebase，避免使用者未按儲存就離頁而遺失狀態
+  // 注意：若訂單尚未建立（id 為 null），upsertOrder() 會自動產生 id 並新增到陣列
+  // upsertOrder() 使用記憶體中的 _currentOrder，不從 DOM 讀取，不會覆蓋未填完的欄位
+  if(_currentOrder.id){
+    // 已存在的訂單：直接更新陣列中的那筆，再儲存
+    const idx = orders.findIndex(o => o.id === _currentOrder.id);
+    if(idx >= 0){
+      orders[idx].payStatus  = status;
+      orders[idx].updatedAt  = todayStr();
+      _currentOrder.updatedAt = todayStr();
+      saveOrders();
+    }
+  }
+  // 新訂單尚未儲存時（id 為 null）不自動建立，讓使用者按「儲存」時一併存入
+  // 這樣可避免產生不完整的草稿訂單
+
+  showToast('💳 付款狀態已更新');
 }
 
 function updateOrderPay(){
@@ -816,7 +849,10 @@ function shipOrder(id){
   const locId = getMainLocation()?.id || 'store_A';
   const now   = nowStr();
 
-  // 扣庫存
+  // 扣庫存，並補寫一筆含 amount 的 order_ship 銷售 log
+  // 說明：adjustStock() 內部寫入的 log 主要記錄庫存異動（before/after/qty），
+  //       但缺少 amount 欄位。報表查 SALE_OPS（含 order_ship）計算銷售額時
+  //       會讀取 l.amount，所以需要額外呼叫 addLog 補一筆帶金額的銷售記錄。
   o.items.forEach(item => {
     adjustStock(item.id, locId, -item.qty, {
       op:      'order_ship',
@@ -824,6 +860,20 @@ function shipOrder(id){
       refType: 'order',
       note:    `訂單出貨 ${o.no}`,
     });
+
+    // 補寫銷售 log，供報表正確累計訂單出貨金額
+    addLog({
+      op:          'order_ship',
+      productId:   item.id,
+      productName: item.name,
+      qty:         item.qty,
+      unitPrice:   item.unitPrice,
+      amount:      item.unitPrice * item.qty, // 報表需要的金額欄位
+      refId:       o.id,
+      refType:     'order',
+      note:        `訂單出貨 ${o.no}`,
+    });
+
     item.shippedQty = item.qty;
   });
 
@@ -889,6 +939,13 @@ function forceUnlockOrder(id){
 function cancelOrder(id){
   const o = getOrder(id || _currentOrder?.id);
   if(!o) return;
+
+  // 若訂單正在生產中，提醒使用者手動關閉生產單
+  // 不自動取消生產單，因為生產單可能已部分完成，自動取消容易誤刪生產進度
+  if(o.status === 'producing'){
+    if(!confirm('此訂單有進行中的生產單，取消後請手動關閉生產單。\n確定要取消訂單嗎？')) return;
+  }
+
   if(!confirm(`確定取消訂單 ${o.no}？\n此操作無法復原。`)) return;
   // 如果已出貨，歸還庫存
   if(o.status === 'shipped'){

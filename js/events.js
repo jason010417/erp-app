@@ -219,10 +219,22 @@ function saveEvent(){
   const location = document.getElementById('ev-location')?.value.trim();
   if(!name)    { showToast('⚠️ 請填寫活動名稱'); return; }
   if(!location){ showToast('⚠️ 請填寫地點'); return; }
+
+  // 取得日期欄位的值，用來做日期邏輯驗證
+  const startDate = document.getElementById('ev-start')?.value || todayStr();
+  const endDate   = document.getElementById('ev-end')?.value   || todayStr();
+
+  // 驗證開始日期不可晚於結束日期
+  // 若日期填反，活動狀態會立刻變成「已結束」，也無法開啟 POS，使用者不容易察覺原因
+  if(startDate && endDate && startDate > endDate){
+    showToast('⚠️ 開始日期不可晚於結束日期');
+    return;
+  }
+
   _currentEvent.name      = name;
   _currentEvent.location  = location;
-  _currentEvent.startDate = document.getElementById('ev-start')?.value || todayStr();
-  _currentEvent.endDate   = document.getElementById('ev-end')?.value   || todayStr();
+  _currentEvent.startDate = startDate;
+  _currentEvent.endDate   = endDate;
   _currentEvent.staff     = document.getElementById('ev-staff')?.value.trim() || '';
   _currentEvent.note      = document.getElementById('ev-note')?.value.trim()  || '';
   _currentEvent.items     = JSON.parse(JSON.stringify(_evItems));
@@ -569,8 +581,46 @@ function saveOfflineState(eventId, state){
 }
 function enterOfflineMode(eventId){
   if(!confirm('確定進入外展離線模式？\n銷售記錄將存在本機，回來後可審核上傳。')) return;
+
+  const ev = getEvent(eventId);
+  if(!ev){ showToast('⚠️ 找不到此外展活動'); return; }
+
+  // 防止重複扣庫存：若此活動已標記過 stockDeducted，直接跳過扣減
+  // 情境說明：若使用者意外點兩次「開啟」，或離線模式中途退出後重新進入，
+  // 不應再扣一次庫存，否則會導致庫存被扣兩次
+  if(ev.stockDeducted){
+    saveOfflineState(eventId, { offlineMode:true, startedAt:nowStr() });
+    showToast('✅ 已重新進入外展離線模式（庫存先前已扣）');
+    showEventDetail(eventId);
+    return;
+  }
+
+  // 從主倉庫位置扣除帶出品項的庫存
+  // 對應 submitEventUpload() 中「歸還庫存」所用的同一個 locId
+  const locId = getMainLocation()?.id || 'store_A';
+  const itemsToDeduct = (ev.items || []).filter(i => (i.takeQty || 0) > 0);
+
+  if(itemsToDeduct.length === 0){
+    showToast('⚠️ 尚未設定任何帶貨品項，請先儲存帶貨數量再開啟外展模式');
+    return;
+  }
+
+  // 逐一扣減每個帶貨品項的庫存，delta 為負數代表扣出
+  itemsToDeduct.forEach(item => {
+    adjustStock(item.id, locId, -item.takeQty, {
+      op:      'ev_takeout',
+      refId:   eventId,
+      refType: 'event',
+      note:    `外展帶出：${ev.name}`,
+    });
+  });
+
+  // 在活動物件上標記「已扣庫存」，防止重複扣減
+  ev.stockDeducted = true;
+  saveEvents();
+
   saveOfflineState(eventId, { offlineMode:true, startedAt:nowStr() });
-  showToast('✅ 已進入外展離線模式');
+  showToast(`✅ 已進入外展離線模式，已扣除 ${itemsToDeduct.length} 種商品庫存`);
   showEventDetail(eventId);
 }
 function exitOfflineMode(eventId){
