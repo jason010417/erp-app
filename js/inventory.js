@@ -123,11 +123,28 @@ function renderInventorySummary(){
   const el = document.getElementById('inventory-summary');
   if(!el) return;
   const low = getLowStockItems();
-  if(!low.length){
+
+  // 取得效期警示數量（expiry.js 載入後才有此函式，用 typeof 防呆）
+  const expiryCount = typeof getExpiryAlertCount === 'function' ? getExpiryAlertCount() : 0;
+
+  // 效期警示 banner：30 天內到期才顯示，點擊跳到效期管理頁
+  const expiryBanner = expiryCount > 0
+    ? `<div class="inv-warn-row" style="cursor:pointer;background:rgba(230,168,23,0.1);border-left:3px solid var(--amber);"
+        onclick="initExpiryPage();showPage('expiry')">
+        <span><i class="ti ti-calendar-event" style="color:var(--amber);margin-right:6px;"></i>
+          ${expiryCount} 批次效期將至（30天內）</span>
+        <span style="color:var(--amber);font-size:12px;">查看 →</span>
+      </div>`
+    : '';
+
+  // 庫存充足且無效期警示才顯示「無警示」
+  if(!low.length && !expiryCount){
     el.innerHTML = `<div class="inv-ok"><i class="ti ti-circle-check"></i> 庫存充足，無警示</div>`;
     return;
   }
-  el.innerHTML = low.slice(0,5).map(item => {
+
+  // 效期 banner 放在庫存警示列表最前面
+  el.innerHTML = expiryBanner + low.slice(0,5).map(item => {
     const total = getTotalStock(item.id);
     return `<div class="inv-warn-row" onclick="showPage('inventory-detail');selectProduct('${item.id}')">
       <span>${item.emoji} ${item.name}</span>

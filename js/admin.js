@@ -280,7 +280,7 @@ function openSupplierEditor(id){
   const merged = { ...s, ...extra };
   document.getElementById('se-id').textContent   = merged.id;
   document.getElementById('se-name').textContent = merged.name;
-  ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo'].forEach(f => {
+  ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo','story','consignmentType'].forEach(f => {
     const el = document.getElementById('se-' + f);
     if(el) el.value = merged[f] || '';
   });
@@ -290,7 +290,7 @@ function openSupplierEditor(id){
 function saveSupplierEditor(){
   const id = document.getElementById('se-hidden-id').value;
   const data = {};
-  ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo']
+  ['contact','tel','email','line','bankName','bankBranch','bankCode','accountName','accountNo','story','consignmentType']
     .forEach(f => { data[f] = document.getElementById('se-'+f)?.value.trim() || ''; });
   localStorage.setItem('erp_sup_' + id, JSON.stringify(data));
   if(typeof _db !== 'undefined' && _db){
@@ -839,6 +839,19 @@ function createAdminModals(){
         <div class="cust-field"><label>電話</label><input type="tel" id="se-tel" /></div>
         <div class="cust-field"><label>Email</label><input type="email" id="se-email" /></div>
         <div class="cust-field"><label>Line</label><input type="text" id="se-line" /></div>
+        <div class="cust-form-section">庇護工廠資訊</div>
+        <div class="cust-field"><label>合作方式</label>
+          <select id="se-consignmentType">
+            <option value="">買斷進貨</option>
+            <option value="consignment">寄賣</option>
+          </select>
+        </div>
+        <div class="cust-field"><label>工廠故事（POS 介紹用）</label>
+          <textarea id="se-story" rows="3"
+            style="resize:vertical;padding:8px;border:1px solid var(--border);
+            border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;width:100%;"
+            placeholder="介紹這間庇護工廠的故事、特色…"></textarea>
+        </div>
         <div class="cust-form-section">銀行資訊</div>
         <div class="cust-field"><label>銀行名稱</label><input type="text" id="se-bankName" /></div>
         <div class="cust-field"><label>分行</label><input type="text" id="se-bankBranch" /></div>
