@@ -138,20 +138,10 @@
           <span class="sb-name">客戶管理</span>
           <span class="sb-sub">聯絡資料</span>
         </button>
-        <button class="submenu-btn gray" onclick="showPage('sale-report')">
-          <i class="ti ti-chart-bar"></i>
-          <span class="sb-name">銷貨明細</span>
-          <span class="sb-sub">查詢記錄</span>
-        </button>
         <button class="submenu-btn gray" onclick="showPage('gift-orders')">
           <i class="ti ti-gift"></i>
           <span class="sb-name">贈品出庫</span>
           <span class="sb-sub">贈品/試吃</span>
-        </button>
-        <button class="submenu-btn teal" onclick="initCashReconcilePage();showPage('cash-reconcile')">
-          <i class="ti ti-cash"></i>
-          <span class="sb-name">每日對帳</span>
-          <span class="sb-sub">現金核對</span>
         </button>
         <button class="submenu-btn purple" onclick="initSupplierReportPage();showPage('supplier-report')">
           <i class="ti ti-building-store"></i>
@@ -186,11 +176,6 @@
           <i class="ti ti-arrows-right-left"></i>
           <span class="sb-name">調貨單</span>
           <span class="sb-sub">A → B 門市</span>
-        </button>
-        <button class="submenu-btn gray" onclick="showPage('purchase-report')">
-          <i class="ti ti-chart-line"></i>
-          <span class="sb-name">進貨明細</span>
-          <span class="sb-sub">查詢記錄</span>
         </button>
         <button class="submenu-btn amber" onclick="initExpiryPage();showPage('expiry')">
           <i class="ti ti-calendar-event"></i>
@@ -565,6 +550,17 @@
           <div><div class="admin-item-name">Excel 匯入</div><div class="admin-item-sub">商品、廠商、客戶</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
+        <div class="admin-group-title" style="margin-top:14px;">報表查詢</div>
+        <button class="admin-item" onclick="requireManager(()=>showPage('sale-report'))">
+          <i class="ti ti-chart-bar"></i>
+          <div><div class="admin-item-name">銷貨明細</div><div class="admin-item-sub">銷售記錄查詢</div></div>
+          <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
+        </button>
+        <button class="admin-item" onclick="requireManager(()=>showPage('purchase-report'))">
+          <i class="ti ti-chart-line"></i>
+          <div><div class="admin-item-name">進貨明細</div><div class="admin-item-sub">進貨記錄查詢</div></div>
+          <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
+        </button>
         <div class="admin-group-title" style="margin-top:14px;">歷史查詢</div>
         <button class="admin-item" onclick="requireManager(()=>{ renderEstimateHistory(); showPage('hist-estimates'); })">
           <i class="ti ti-file-description"></i>
@@ -693,9 +689,6 @@
     <div class="page" id="page-customer-detail"></div>
     <div class="page" id="page-transfer-edit"></div>
     <div class="page" id="page-purchase-edit"></div>
-
-    <!-- 每日現金對帳 -->
-    <div class="page" id="page-cash-reconcile"></div>
 
     <!-- 廠商銷售報表 -->
     <div class="page" id="page-supplier-report"></div>
@@ -832,7 +825,6 @@
 <script src="js/gift.js"></script>
 <script src="js/processing.js"></script>
 <script src="js/custom_order.js"></script>
-<script src="js/cash_reconcile.js"></script>
 <script src="js/supplier_report.js"></script>
 <script src="js/expiry.js"></script>
 

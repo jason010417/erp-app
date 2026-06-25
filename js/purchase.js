@@ -466,6 +466,78 @@ function receivePurchaseStock(){
   renderPurchaseList(_puFilter);
   renderPurchaseEditPage();
   showToast(`📦 ${pu.items.length} 種商品已入庫：${pu.no}`);
+
+  // 提示登錄效期
+  _openExpiryAfterReceive(pu);
+}
+
+function _openExpiryAfterReceive(pu){
+  const existing = document.getElementById('expiryAfterReceiveModal');
+  if(existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id        = 'expiryAfterReceiveModal';
+  modal.className = 'modal-overlay';
+  modal.style.display = 'flex';
+  modal.onclick = e => { if(e.target === modal) modal.remove(); };
+
+  const rows = pu.items.map((item, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:20px;flex-shrink:0;">${item.emoji}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;">${item.name}</div>
+        <div style="font-size:11px;color:var(--text3);">× ${item.qty}</div>
+      </div>
+      <input type="date" id="ear-exp-${idx}"
+        style="width:130px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:13px;"
+        placeholder="選填" />
+    </div>`).join('');
+
+  modal.innerHTML = `
+    <div class="modal-card" style="max-width:400px;">
+      <div class="modal-title"><i class="ti ti-calendar-event"></i> 登錄效期（選填）</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">
+        有效期限的商品請填入日期，不需追蹤的留空即可。
+      </div>
+      <div style="max-height:300px;overflow-y:auto;">${rows}</div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="modal-cancel-btn" style="flex:1;" onclick="document.getElementById('expiryAfterReceiveModal').remove()">跳過</button>
+        <button class="confirm-btn" style="flex:1;padding:10px;"
+          onclick="_saveExpiryFromReceive(${JSON.stringify(pu.items).replace(/"/g,'&quot;')})">
+          <i class="ti ti-check"></i> 儲存效期
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function _saveExpiryFromReceive(items){
+  loadBatches();
+  let saved = 0;
+  items.forEach((item, idx) => {
+    const expiryDate = document.getElementById(`ear-exp-${idx}`)?.value;
+    if(!expiryDate) return;
+    _batches.push({
+      id:          'B' + Date.now() + idx,
+      productId:   item.id,
+      productName: item.name,
+      emoji:       item.emoji || '📦',
+      unit:        item.unit  || '個',
+      expiryDate,
+      qty:         item.qty,
+      note:        `採購單入庫`,
+      addedAt:     todayStr(),
+      consumed:    false,
+    });
+    saved++;
+  });
+  saveBatches();
+  document.getElementById('expiryAfterReceiveModal')?.remove();
+  if(saved > 0){
+    showToast(`✅ 已登錄 ${saved} 項效期批次`);
+  } else {
+    showToast('已跳過效期登錄');
+  }
 }
 
 // ── 付款狀態 ──
