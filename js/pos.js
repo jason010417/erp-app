@@ -200,6 +200,10 @@ function posBack(){
 function confirmPOS(){
   if(!_posCart.length){ showToast('⚠️ 購物車是空的'); return; }
   const total    = calcPOSTotal();
+  if(_posPayMethod === 'cash'){
+    const received = Math.max(0, parseInt(document.getElementById('pos-cash-received')?.value) || 0);
+    if(received < total){ showToast('⚠️ 收款金額不足，請確認金額'); return; }
+  }
   const locId    = _posEventId
     ? ('event_'+_posEventId)
     : (getMainLocation()?.id || 'store_A');

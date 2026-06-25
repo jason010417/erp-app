@@ -221,11 +221,9 @@
         <button class="small-btn green-btn" onclick="newEstimate()"><i class="ti ti-plus"></i> 新增</button>
       </div>
       <div class="filter-tabs" id="estimate-filter-tabs">
-        <button class="ftab active" onclick="renderEstimateList('all')">全部</button>
+        <button class="ftab active" onclick="renderEstimateList('all')">進行中</button>
         <button class="ftab" onclick="renderEstimateList('draft')">草稿</button>
         <button class="ftab" onclick="renderEstimateList('pending')">待確認</button>
-        <button class="ftab" onclick="renderEstimateList('converted')">已轉單</button>
-        <button class="ftab" onclick="renderEstimateList('cancelled')">已取消</button>
       </div>
       <div id="estimate-list"></div>
     </div>
@@ -323,12 +321,11 @@
         <button class="small-btn green-btn" onclick="newOrder()"><i class="ti ti-plus"></i> 新增</button>
       </div>
       <div class="filter-tabs">
-        <button class="ftab active" onclick="renderOrderList('all')">全部</button>
+        <button class="ftab active" onclick="renderOrderList('all')">進行中</button>
         <button class="ftab" onclick="renderOrderList('pending')">待處理</button>
         <button class="ftab" onclick="renderOrderList('producing')">生產中</button>
         <button class="ftab" onclick="renderOrderList('ready')">待出貨</button>
         <button class="ftab" onclick="renderOrderList('shipped')">已出貨</button>
-        <button class="ftab" onclick="renderOrderList('archived')">已結案</button>
       </div>
       <div id="order-list"></div>
     </div>
@@ -341,11 +338,9 @@
         <button class="small-btn green-btn" onclick="newProductionOrder()"><i class="ti ti-plus"></i> 新增</button>
       </div>
       <div class="filter-tabs">
-        <button class="ftab active" onclick="renderProductionList('all')">全部</button>
+        <button class="ftab active" onclick="renderProductionList('all')">進行中</button>
         <button class="ftab" onclick="renderProductionList('prepare')">備料中</button>
         <button class="ftab" onclick="renderProductionList('producing')">生產中</button>
-        <button class="ftab" onclick="renderProductionList('done')">已完成</button>
-        <button class="ftab" onclick="renderProductionList('shipped')">已出貨</button>
       </div>
       <div id="production-list"></div>
     </div>
@@ -555,6 +550,22 @@
           <div><div class="admin-item-name">Excel 匯入</div><div class="admin-item-sub">商品、廠商、客戶</div></div>
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
+        <div class="admin-group-title" style="margin-top:14px;">歷史查詢</div>
+        <button class="admin-item" onclick="requireManager(()=>{ renderEstimateHistory(); showPage('hist-estimates'); })">
+          <i class="ti ti-file-description"></i>
+          <div><div class="admin-item-name">估價單查詢</div><div class="admin-item-sub">已轉單、已取消</div></div>
+          <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
+        </button>
+        <button class="admin-item" onclick="requireManager(()=>{ renderOrderHistory(); showPage('hist-orders'); })">
+          <i class="ti ti-receipt-2"></i>
+          <div><div class="admin-item-name">訂單查詢</div><div class="admin-item-sub">已結案訂單</div></div>
+          <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
+        </button>
+        <button class="admin-item" onclick="requireManager(()=>{ renderProductionHistory(); showPage('hist-production'); })">
+          <i class="ti ti-player-play"></i>
+          <div><div class="admin-item-name">生產單查詢</div><div class="admin-item-sub">已完成、已出貨</div></div>
+          <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
+        </button>
         <div class="admin-group-title" style="margin-top:14px;">系統</div>
         <button class="admin-item" onclick="requireAdmin(()=>showPage('admin-system'))">
           <i class="ti ti-settings"></i>
@@ -562,6 +573,48 @@
           <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text3);"></i>
         </button>
       </div>
+    </div>
+
+    <!-- ══════════ 估價單歷史查詢 ══════════ -->
+    <div class="page" id="page-hist-estimates">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-file-description" style="color:#6B4FBB;"></i> 估價單查詢</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0 8px;">
+        <input type="date" id="est-hist-from" style="flex:1;min-width:110px;" onchange="renderEstimateHistory()">
+        <input type="date" id="est-hist-to"   style="flex:1;min-width:110px;" onchange="renderEstimateHistory()">
+        <input type="search" id="est-hist-kw" placeholder="單號 / 客戶 / 品項" style="flex:2;min-width:150px;" oninput="renderEstimateHistory()">
+      </div>
+      <div id="est-hist-list"></div>
+    </div>
+
+    <!-- ══════════ 訂單歷史查詢 ══════════ -->
+    <div class="page" id="page-hist-orders">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-receipt-2" style="color:#2c5f8a;"></i> 訂單查詢</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0 8px;">
+        <input type="date" id="ord-hist-from" style="flex:1;min-width:110px;" onchange="renderOrderHistory()">
+        <input type="date" id="ord-hist-to"   style="flex:1;min-width:110px;" onchange="renderOrderHistory()">
+        <input type="search" id="ord-hist-kw" placeholder="單號 / 客戶 / 品項" style="flex:2;min-width:150px;" oninput="renderOrderHistory()">
+      </div>
+      <div id="ord-hist-list"></div>
+    </div>
+
+    <!-- ══════════ 生產單歷史查詢 ══════════ -->
+    <div class="page" id="page-hist-production">
+      <div class="op-header">
+        <button class="back-btn" onclick="showPage('admin')"><i class="ti ti-arrow-left"></i></button>
+        <div class="op-title"><i class="ti ti-player-play" style="color:#1D9E75;"></i> 生產單查詢</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0 8px;">
+        <input type="date" id="prod-hist-from" style="flex:1;min-width:110px;" onchange="renderProductionHistory()">
+        <input type="date" id="prod-hist-to"   style="flex:1;min-width:110px;" onchange="renderProductionHistory()">
+        <input type="search" id="prod-hist-kw" placeholder="單號 / 商品 / 訂單號" style="flex:2;min-width:150px;" oninput="renderProductionHistory()">
+      </div>
+      <div id="prod-hist-list"></div>
     </div>
 
     <!-- ══════════ 系統設定（管理員）══════════ -->

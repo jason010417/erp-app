@@ -36,13 +36,15 @@ function renderEstimateList(filter){
   _estFilter = filter || 'all';
   // 更新 tab active
   document.querySelectorAll('#page-estimates .ftab').forEach((btn, i) => {
-    const filters = ['all','draft','pending','converted','cancelled'];
+    const filters = ['all','draft','pending'];
     btn.classList.toggle('active', filters[i] === _estFilter);
   });
 
   const el   = document.getElementById('estimate-list');
   if(!el) return;
-  let list   = _estFilter === 'all' ? estimates : estimates.filter(e => e.status === _estFilter);
+  let list   = _estFilter === 'all'
+    ? estimates.filter(e => ['draft','pending'].includes(e.status))
+    : estimates.filter(e => e.status === _estFilter);
   list       = list.slice().reverse();
 
   if(!list.length){
@@ -361,6 +363,42 @@ function upsertEstimate(){
   else         estimates.push(copy);
   saveEstimates();
   renderEstimateList(_estFilter);
+}
+
+// ── 歷史查詢（管理區） ──
+function renderEstimateHistory(){
+  const kw   = (document.getElementById('est-hist-kw')?.value   || '').toLowerCase();
+  const from = document.getElementById('est-hist-from')?.value  || '';
+  const to   = document.getElementById('est-hist-to')?.value    || '';
+
+  let list = estimates.filter(e => ['converted','cancelled'].includes(e.status));
+  if(from) list = list.filter(e => (e._date || todayStr()) >= from);
+  if(to)   list = list.filter(e => (e._date || todayStr()) <= to);
+  if(kw)   list = list.filter(e => {
+    const cust = getCustomer(e.customerId);
+    return (e.no||'').toLowerCase().includes(kw)
+        || (cust?.name||'').toLowerCase().includes(kw)
+        || (e.items||[]).some(i => (i.name||'').toLowerCase().includes(kw));
+  });
+  list = list.slice().reverse();
+
+  const el = document.getElementById('est-hist-list');
+  if(!el) return;
+  if(!list.length){ el.innerHTML = `<div class="order-empty">沒有符合的記錄</div>`; return; }
+
+  el.innerHTML = list.map(e => {
+    const cust = getCustomer(e.customerId);
+    return `<div class="list-card" onclick="openEstimateDetail('${e.id}')">
+      <div class="list-card-top">
+        <span class="list-card-no">${e.no}</span>
+        ${estStatusBadge(e.status)}
+      </div>
+      <div class="list-card-meta">
+        ${cust ? `<span><i class="ti ti-user"></i>${cust.name}</span>` : ''}
+        <span><i class="ti ti-coin"></i>${fmtMoney(e.totalAmount||0)}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── 取消估價單 ──

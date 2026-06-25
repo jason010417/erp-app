@@ -64,7 +64,7 @@ function renderOrderList(filter, typeFilter){
 
   // 狀態 tabs
   document.querySelectorAll('#page-orders .ftab').forEach((btn, i) => {
-    const filters = ['all','pending','producing','ready','shipped','archived'];
+    const filters = ['all','pending','producing','ready','shipped'];
     btn.classList.toggle('active', filters[i] === _orderFilter);
   });
 
@@ -78,7 +78,7 @@ function renderOrderList(filter, typeFilter){
   if(!el) return;
 
   let list = _orderFilter === 'all'
-    ? orders
+    ? orders.filter(o => o.status !== 'archived')
     : orders.filter(o => o.status === _orderFilter);
 
   if(_orderTypeFilter !== 'all'){
@@ -572,7 +572,7 @@ function changeOrderItemQty(idx, delta){
 function changeOrderItemPrice(idx, val){
   const item  = _currentOrder.items[idx];
   if(!item) return;
-  item.unitPrice = parseInt(val) || 0;
+  item.unitPrice = Math.max(0, parseInt(val) || 0);
   item.discount  = item.unitPrice !== item.originalPrice
     ? { type:'item', value: item.originalPrice - item.unitPrice, reason:'手動改價' }
     : null;
@@ -975,6 +975,43 @@ function hardDeleteOrder(id){
   showToast('🗑️ 訂單已永久刪除');
   renderOrderList(_orderFilter);
   showPage('orders');
+}
+
+// ── 歷史查詢（管理區） ──
+function renderOrderHistory(){
+  const kw   = (document.getElementById('ord-hist-kw')?.value   || '').toLowerCase();
+  const from = document.getElementById('ord-hist-from')?.value  || '';
+  const to   = document.getElementById('ord-hist-to')?.value    || '';
+
+  let list = orders.filter(o => o.status === 'archived');
+  if(from) list = list.filter(o => (o.updatedAt || o._date || '') >= from);
+  if(to)   list = list.filter(o => (o.updatedAt || o._date || '') <= to);
+  if(kw)   list = list.filter(o => {
+    const cust = getCustomer(o.customerId);
+    return (o.no||'').toLowerCase().includes(kw)
+        || (cust?.name||'').toLowerCase().includes(kw)
+        || (o.items||[]).some(i => (i.name||'').toLowerCase().includes(kw));
+  });
+  list = list.slice().reverse();
+
+  const el = document.getElementById('ord-hist-list');
+  if(!el) return;
+  if(!list.length){ el.innerHTML = `<div class="order-empty">沒有符合的記錄</div>`; return; }
+
+  el.innerHTML = list.map(o => {
+    const cust = getCustomer(o.customerId);
+    return `<div class="list-card" onclick="openOrderDetail('${o.id}')">
+      <div class="list-card-top">
+        <span class="list-card-no">${o.no}</span>
+        <span class="status-badge badge-archived"><i class="ti ti-archive"></i> 已結案</span>
+      </div>
+      <div class="list-card-meta">
+        ${cust ? `<span><i class="ti ti-user"></i>${cust.name}</span>` : ''}
+        <span><i class="ti ti-coin"></i>${fmtMoney(o.totalAmount||0)}</span>
+        ${o.payStatus==='paid' ? `<span style="color:var(--green)"><i class="ti ti-circle-check"></i> 已收款</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── 從估價單ID開啟估價單 ──

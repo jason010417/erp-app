@@ -41,14 +41,14 @@ let _prodFilter = 'all';
 function renderProductionList(filter){
   _prodFilter = filter || 'all';
   document.querySelectorAll('#page-production .ftab').forEach((btn, i) => {
-    const filters = ['all','prepare','producing','done','shipped'];
+    const filters = ['all','prepare','producing'];
     btn.classList.toggle('active', filters[i] === _prodFilter);
   });
 
   const el = document.getElementById('production-list');
   if(!el) return;
   let list = _prodFilter === 'all'
-    ? productionOrders
+    ? productionOrders.filter(p => !['done','shipped'].includes(p.status))
     : productionOrders.filter(p => p.status === _prodFilter);
   list = list.slice().reverse();
 
@@ -427,6 +427,41 @@ function advanceProdStatus(id){
   } else {
     showToast(`✅ 狀態已更新為「${next.label}」`);
   }
+}
+
+// ── 歷史查詢（管理區） ──
+function renderProductionHistory(){
+  const kw   = (document.getElementById('prod-hist-kw')?.value   || '').toLowerCase();
+  const from = document.getElementById('prod-hist-from')?.value  || '';
+  const to   = document.getElementById('prod-hist-to')?.value    || '';
+
+  let list = productionOrders.filter(p => ['done','shipped'].includes(p.status));
+  if(from) list = list.filter(p => (p.updatedAt || '') >= from);
+  if(to)   list = list.filter(p => (p.updatedAt || '') <= to);
+  if(kw)   list = list.filter(p =>
+    (p.no||'').toLowerCase().includes(kw) ||
+    (p.productName||'').toLowerCase().includes(kw) ||
+    (p.orderNo||'').toLowerCase().includes(kw)
+  );
+  list = list.slice().reverse();
+
+  const el = document.getElementById('prod-hist-list');
+  if(!el) return;
+  if(!list.length){ el.innerHTML = `<div class="order-empty">沒有符合的記錄</div>`; return; }
+
+  const STATUS_LABEL = { done:'已完成', shipped:'已出貨' };
+  el.innerHTML = list.map(p => `
+    <div class="list-card" onclick="openProdDetail('${p.id}')">
+      <div class="list-card-top">
+        <span class="list-card-no">${p.no}</span>
+        <span class="status-badge badge-done"><i class="ti ti-circle-check"></i> ${STATUS_LABEL[p.status]||p.status}</span>
+      </div>
+      <div class="list-card-meta">
+        <span><i class="ti ti-package"></i>${p.productName||''}</span>
+        ${p.orderNo ? `<span><i class="ti ti-receipt"></i>${p.orderNo}</span>` : ''}
+        <span><i class="ti ti-123"></i>數量 ${p.qty||0}</span>
+      </div>
+    </div>`).join('');
 }
 
 // ── 管理員永久刪除生產單 ──

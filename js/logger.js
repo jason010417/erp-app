@@ -31,12 +31,15 @@ function addLog(data){
     ...data,
   };
   logs.push(log);
-  saveLogs();
 
   // 推送到 Firebase（firebase.js 提供）
+  // 必須在 saveLogs() 之前呼叫：pushLogToFirebase 會同步設定 log._fbKey，
+  // 讓 localStorage 存入帶有 _fbKey 的版本，避免 sync 時 remoteMap + localOnly 各放一份造成重複
   if(typeof pushLogToFirebase === 'function'){
     pushLogToFirebase(log);
   }
+  saveLogs();
+
   return log;
 }
 
