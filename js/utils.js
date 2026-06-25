@@ -143,8 +143,9 @@ function showPage(name){
     'gift-orders':     () => typeof initGiftOrdersPage     === 'function' && initGiftOrdersPage(),
     'processing':      () => typeof initProcessingPage     === 'function' && initProcessingPage(),
     'transfer':        () => typeof renderTransferList     === 'function' && renderTransferList(),
+    'kiosk-home':      () => typeof renderKioskHome     === 'function' && renderKioskHome(),
     'pos-a':           () => {},  // POS 由 startEventPOS 或直接導航時手動初始化
-    'store-b-sales':   () => typeof initStoreBPage         === 'function' && initStoreBPage(),
+    'store-daily':     () => typeof initStoreDailyPage     === 'function' && initStoreDailyPage(),
     'events':          () => typeof renderEventList        === 'function' && renderEventList(),
     'event-detail':    () => {},
     'sale-report':     () => typeof initSaleReportPage     === 'function' && initSaleReportPage(),

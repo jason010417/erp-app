@@ -216,6 +216,52 @@ function newOrder(){
     <div class="modal-card" style="max-width:340px;">
       <div class="modal-title"><i class="ti ti-plus"></i> 新增訂單</div>
       <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">請選擇訂單類型</div>
+      <div style="display:grid;gap:10px;margin-bottom:4px;">
+        <button onclick="document.getElementById('orderTypeModal').remove();pickEstimateForOrder()"
+          style="padding:14px 16px;border-radius:var(--radius);border:2px solid #BEE3F8;
+          background:#EBF8FF;color:#2C5282;cursor:pointer;text-align:left;display:flex;gap:14px;align-items:center;">
+          <i class="ti ti-phone" style="font-size:26px;color:#3182CE;flex-shrink:0;"></i>
+          <div>
+            <div style="font-weight:700;font-size:14px;margin-bottom:3px;">📞 報價訂單</div>
+            <div style="font-size:11px;color:#2B6CB0;">電話/Line 接單，連結既有估價單</div>
+          </div>
+        </button>
+        <button onclick="document.getElementById('orderTypeModal').remove();_createNewOrder('retail','platform')"
+          style="padding:14px 16px;border-radius:var(--radius);border:2px solid #C6F6D5;
+          background:#F0FFF4;color:#22543D;cursor:pointer;text-align:left;display:flex;gap:14px;align-items:center;">
+          <i class="ti ti-shopping-cart" style="font-size:26px;color:#38A169;flex-shrink:0;"></i>
+          <div>
+            <div style="font-weight:700;font-size:14px;margin-bottom:3px;">🛒 平台訂單</div>
+            <div style="font-size:11px;color:#276749;">蝦皮/官網/7-11，直接建立</div>
+          </div>
+        </button>
+        <button onclick="document.getElementById('orderTypeModal').remove();_showOtherOrderTypes()"
+          style="padding:14px 16px;border-radius:var(--radius);border:2px solid #E2E8F0;
+          background:#F7FAFC;color:#2D3748;cursor:pointer;text-align:left;display:flex;gap:14px;align-items:center;">
+          <i class="ti ti-dots" style="font-size:26px;color:#718096;flex-shrink:0;"></i>
+          <div>
+            <div style="font-weight:700;font-size:14px;margin-bottom:3px;">🏪 其他</div>
+            <div style="font-size:11px;color:#4A5568;">零售或客製專案</div>
+          </div>
+        </button>
+      </div>
+      <button class="modal-cancel-btn" style="margin-top:8px;width:100%;"
+        onclick="document.getElementById('orderTypeModal').remove()">取消</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function _showOtherOrderTypes(){
+  const existing = document.getElementById('orderTypeModal');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.className     = 'modal-overlay';
+  modal.id            = 'orderTypeModal';
+  modal.style.display = 'flex';
+  modal.onclick = e => { if(e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="modal-card" style="max-width:340px;">
+      <div class="modal-title"><i class="ti ti-plus"></i> 其他訂單</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">
         <button onclick="document.getElementById('orderTypeModal').remove();_createNewOrder('retail')"
           style="padding:18px 12px;border-radius:var(--radius);border:2px solid #FAEEDA;
@@ -238,12 +284,45 @@ function newOrder(){
   document.body.appendChild(modal);
 }
 
-function _createNewOrder(type){
+function pickEstimateForOrder(){
+  const pending = estimates.filter(e => ['draft','pending'].includes(e.status));
+  const existing = document.getElementById('orderTypeModal');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.className     = 'modal-overlay';
+  modal.id            = 'orderTypeModal';
+  modal.style.display = 'flex';
+  modal.onclick = e => { if(e.target === modal) modal.remove(); };
+
+  const listHtml = pending.length
+    ? pending.map(e => {
+        const cust = getCustomer(e.customerId);
+        return `<div onclick="document.getElementById('orderTypeModal').remove();newOrderFromEstimate(estimates.find(x=>x.id==='${e.id}'))"
+          style="padding:10px 12px;border:1px solid #E2E8F0;border-radius:var(--radius-sm);cursor:pointer;margin-bottom:6px;
+          background:var(--bg);display:flex;flex-direction:column;gap:3px;">
+          <div style="font-weight:600;font-size:13px;">${e.no}</div>
+          <div style="font-size:12px;color:var(--text2);">${cust ? cust.name : '無客戶'} &nbsp;·&nbsp; ${fmtMoney(e.totalAmount || 0)}</div>
+        </div>`;
+      }).join('')
+    : '<div style="padding:20px;text-align:center;color:var(--text2);font-size:13px;">目前沒有待轉單的估價單</div>';
+
+  modal.innerHTML = `
+    <div class="modal-card" style="max-width:360px;">
+      <div class="modal-title"><i class="ti ti-phone"></i> 選擇估價單</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">選擇要轉成訂單的估價單</div>
+      <div style="max-height:300px;overflow-y:auto;">${listHtml}</div>
+      <button class="modal-cancel-btn" style="margin-top:10px;width:100%;"
+        onclick="document.getElementById('orderTypeModal').remove()">取消</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function _createNewOrder(type, source = 'phone'){
   _currentOrder = {
     id:            null,
     no:            genOrderNo(),
     orderType:     type,
-    source:        'phone',
+    source,
     estimateRef:   '',
     estimateId:    null,
     customerId:    null,
@@ -324,9 +403,10 @@ function renderOrderEditPage(){
       <div class="cust-field">
         <label>訂單來源</label>
         <select id="ord-source" ${isLocked?'disabled':''}>
-          <option value="phone"  ${o.source==='phone'  ?'selected':''}>電話</option>
-          <option value="online" ${o.source==='online' ?'selected':''}>網路</option>
-          <option value="walkin" ${o.source==='walkin' ?'selected':''}>門市</option>
+          <option value="phone"    ${o.source==='phone'    ?'selected':''}>電話/Line</option>
+          <option value="platform" ${o.source==='platform' ?'selected':''}>平台（蝦皮/官網/7-11）</option>
+          <option value="online"   ${o.source==='online'   ?'selected':''}>其他網路</option>
+          <option value="walkin"   ${o.source==='walkin'   ?'selected':''}>門市</option>
         </select>
       </div>
 

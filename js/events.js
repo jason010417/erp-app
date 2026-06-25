@@ -428,6 +428,31 @@ function totalEventDays(ev){
   return Math.floor((e-s)/86400000)+1;
 }
 
+// ── Kiosk 主頁：列出今日進行中的外展活動 ──
+function renderKioskHome(){
+  const el = document.getElementById('kiosk-event-list');
+  if(!el) return;
+  const active = events.filter(ev => eventStatus(ev) === 'active');
+  if(!active.length){
+    el.innerHTML = `
+      <div style="text-align:center;padding:48px 16px;color:var(--text3);">
+        <i class="ti ti-map-pin-off" style="font-size:52px;"></i>
+        <div style="margin-top:14px;font-size:16px;font-weight:600;">目前沒有進行中的外展活動</div>
+        <div style="font-size:13px;margin-top:6px;">請聯繫主管開啟活動或登入主管帳號</div>
+      </div>`;
+    return;
+  }
+  el.innerHTML = active.map(ev => `
+    <button class="kiosk-event-card" onclick="startEventPOS('${ev.id}')">
+      <div class="kiosk-event-name">${ev.name}</div>
+      <div class="kiosk-event-meta">
+        <span><i class="ti ti-map-pin"></i> ${ev.location}</span>
+        <span><i class="ti ti-calendar"></i> ${fmtDate(ev.startDate)}${ev.endDate !== ev.startDate ? ' ～ ' + fmtDate(ev.endDate) : ''}</span>
+      </div>
+      <div class="kiosk-tap-hint"><i class="ti ti-hand-click"></i> 點擊開始收銀</div>
+    </button>`).join('');
+}
+
 function renderEventQuickGrid(ev){
   const grid = document.getElementById('event-quick-grid');
   if(!grid) return;

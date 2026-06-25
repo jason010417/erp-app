@@ -189,7 +189,11 @@ function calcChange(){
 
 // ── 返回 ──
 function posBack(){
-  if(_posEventId){
+  if(!isManager()){
+    // 操作員：返回 Kiosk 主頁
+    if(typeof renderKioskHome === 'function') renderKioskHome();
+    showPage('kiosk-home');
+  } else if(_posEventId){
     showPage('event-detail');
   } else {
     showPage('sales-menu');

@@ -57,6 +57,18 @@
   <!-- 主內容 -->
   <main id="main-content">
 
+    <!-- ══════════ Kiosk 主頁（操作員模式）══════════ -->
+    <div class="page" id="page-kiosk-home">
+      <div class="kiosk-header">
+        <div class="kiosk-title"><i class="ti ti-cash-register"></i> 外展收銀</div>
+        <button class="kiosk-mgr-btn" onclick="openEscalateModal('manager', () => { showPage('home'); })">
+          <i class="ti ti-lock"></i> 主管登入
+        </button>
+      </div>
+      <div class="kiosk-hint">選擇今天的外展活動</div>
+      <div class="kiosk-event-list" id="kiosk-event-list"></div>
+    </div>
+
     <!-- ══════════ 首頁（儀表板） ══════════ -->
     <div class="page active" id="page-home">
       <div class="page-header">
@@ -76,9 +88,9 @@
       <!-- 快速操作 -->
       <div class="section-title" style="margin-top:14px;"><i class="ti ti-bolt"></i> 快速操作</div>
       <div class="quick-grid">
-        <button class="quick-btn" onclick="initPOS(); showPage('pos-a')">
-          <i class="ti ti-cash-register"></i>
-          <span>A 門市 POS</span>
+        <button class="quick-btn" onclick="initStoreDailyPage(); showPage('store-daily')">
+          <i class="ti ti-store"></i>
+          <span>門市日銷</span>
         </button>
         <button class="quick-btn" onclick="showPage('purchase')">
           <i class="ti ti-truck-loading"></i>
@@ -101,14 +113,9 @@
         <div class="page-title"><i class="ti ti-shopping-cart"></i> 銷售作業</div>
       </div>
       <div class="submenu-grid">
-        <button class="submenu-btn amber" onclick="initPOS(); showPage('pos-a')">
-          <i class="ti ti-cash-register"></i>
-          <span class="sb-name">A 門市 POS</span>
-          <span class="sb-sub">現場收款</span>
-        </button>
-        <button class="submenu-btn amber" onclick="showPage('store-b-sales')">
+        <button class="submenu-btn amber" onclick="initStoreDailyPage(); showPage('store-daily')">
           <i class="ti ti-store"></i>
-          <span class="sb-name">B 門市銷售</span>
+          <span class="sb-name">門市日銷</span>
           <span class="sb-sub">每日輸入</span>
         </button>
         <button class="submenu-btn purple" onclick="showPage('estimates')">
@@ -438,30 +445,38 @@
       </button>
     </div>
 
-    <!-- ══════════ B 門市日銷售 ══════════ -->
-    <div class="page" id="page-store-b-sales">
+    <!-- ══════════ 門市日銷登入 ══════════ -->
+    <div class="page" id="page-store-daily">
       <div class="op-header">
         <button class="back-btn" onclick="showPage('sales-menu')"><i class="ti ti-arrow-left"></i></button>
-        <div class="op-title"><i class="ti ti-store" style="color:#BA7517;"></i> B 門市銷售輸入</div>
+        <div class="op-title"><i class="ti ti-store" style="color:#BA7517;"></i> 門市日銷登入</div>
       </div>
       <div class="form-card">
         <div class="cust-field">
+          <label>門市</label>
+          <select id="store-daily-loc" onchange="onStoreDailyLocChange()" style="flex:1;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:14px;"></select>
+        </div>
+        <div class="cust-field">
           <label>銷售日期</label>
-          <input type="date" id="storeB-date" />
+          <input type="date" id="store-daily-date" />
         </div>
         <div class="form-section-title">今日銷售品項（只輸入有賣的）</div>
         <div class="search-bar">
           <i class="ti ti-search"></i>
-          <input type="search" id="storeB-search"
+          <input type="search" id="store-daily-search"
             placeholder="搜尋商品加入..."
-            oninput="searchItemsFor('storeB', this.value)" />
+            oninput="searchItemsFor('store-daily', this.value)" />
         </div>
-        <div id="storeB-search-result" style="display:none;"></div>
-        <div class="order-list" id="storeB-item-list">
-          <div class="order-empty">尚未加入品項</div>
+        <div id="store-daily-search-result" style="display:none;"></div>
+        <div class="order-list" id="store-daily-item-list">
+          <div class="order-empty">尚未加入品項，搜尋今日有售出的商品</div>
+        </div>
+        <div style="margin-top:10px;padding:10px 0;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:14px;color:#888;">本次銷售金額</span>
+          <span id="store-daily-total" style="font-size:18px;font-weight:700;color:#BA7517;">$0</span>
         </div>
       </div>
-      <button class="confirm-btn" style="background:#BA7517;" onclick="submitStoreBSale()">
+      <button class="confirm-btn" style="background:#BA7517;" onclick="submitStoreDailySale()">
         <i class="ti ti-check"></i> 確認送出
       </button>
     </div>

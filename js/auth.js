@@ -138,6 +138,8 @@ function downgradeToOperator(){
   setSession('operator');
   applyRoleUI();
   showToast('👷 已切換回操作員模式');
+  if(typeof renderKioskHome === 'function') renderKioskHome();
+  if(typeof showPage === 'function') showPage('kiosk-home');
 }
 
 // ── 套用角色 UI ──
@@ -146,6 +148,10 @@ function applyRoleUI(){
   const labels = { operator:'👷 操作員', manager:'👔 主管', admin:'👑 管理員' };
   const el     = document.getElementById('header-role');
   if(el) el.textContent = labels[role] || '👷 操作員';
+
+  // Kiosk mode: hide nav for operators
+  const nav = document.querySelector('.bottom-nav');
+  if(nav) nav.style.display = isManager() ? '' : 'none';
 }
 
 // ── 修改 PIN（管理員專用）──
@@ -178,12 +184,16 @@ function submitChangePin(){
 
 // ── 初始化：預設操作員，不需要登入 ──
 document.addEventListener('DOMContentLoaded', () => {
-  // 如果沒有 session，預設設為操作員
   if(!getSession()) setSession('operator');
   applyRoleUI();
   loadPinsFromFirebase();
 
-  // Enter 鍵
+  // 操作員模式：啟動後直接進入 Kiosk 主頁
+  if(!isManager()){
+    if(typeof renderKioskHome === 'function') renderKioskHome();
+    if(typeof showPage === 'function') showPage('kiosk-home');
+  }
+
   document.getElementById('escalate-pin-input')?.addEventListener('keydown', e => {
     if(e.key === 'Enter') submitEscalatePin();
   });

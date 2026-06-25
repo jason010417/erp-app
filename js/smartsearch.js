@@ -153,32 +153,34 @@ const SmartSearch = (() => {
 })();
 
 // ── 通用的「為不同情境搜尋商品」入口 ──
-// context: 'estimate' | 'order' | 'pos' | 'storeB' | 'purchase' | 'production'
+// context: 'estimate' | 'order' | 'pos' | 'store-daily' | 'purchase' | 'production'
 const _ssInstances = {};
 
 function searchItemsFor(context, q){
   const resId = {
-    estimate:   'est-item-search-result',
-    order:      'order-item-search-result',
-    pos:        'pos-search-result',
-    storeB:     'storeB-search-result',
-    purchase:   'purchase-search-result',
-    production: 'prod-item-search-result',
-    gift:       'gift-item-search-result',
-    proc_in:    'proc-in-search-result',
-    proc_out:   'proc-out-search-result',
+    estimate:     'est-item-search-result',
+    order:        'order-item-search-result',
+    pos:          'pos-search-result',
+    'store-daily':'store-daily-search-result',
+    storeB:       'store-daily-search-result',
+    purchase:     'purchase-search-result',
+    production:   'prod-item-search-result',
+    gift:         'gift-item-search-result',
+    proc_in:      'proc-in-search-result',
+    proc_out:     'proc-out-search-result',
   }[context];
 
   const poolMap = {
-    estimate:   getSellableItems(),
-    order:      getSellableItems(),
-    pos:        getSellableItems(),
-    storeB:     getSellableItems(),
-    purchase:   getPurchasableItems(),
-    production: FINISHED,
-    gift:       ALL_ITEMS,
-    proc_in:    ALL_ITEMS.filter(i => i.active !== false),   // 加工投入：全品項可選
-    proc_out:   ALL_ITEMS.filter(i => i.active !== false),   // 加工產出：全品項可選
+    estimate:     getSellableItems(),
+    order:        getSellableItems(),
+    pos:          getSellableItems(),
+    'store-daily':getSellableItems(),
+    storeB:       getSellableItems(),
+    purchase:     getPurchasableItems(),
+    production:   FINISHED,
+    gift:         ALL_ITEMS,
+    proc_in:      ALL_ITEMS.filter(i => i.active !== false),
+    proc_out:     ALL_ITEMS.filter(i => i.active !== false),
   };
 
   const res = document.getElementById(resId);
@@ -210,26 +212,28 @@ function searchItemsFor(context, q){
 // 統一的「加入品項」入口
 function addItemTo(context, itemId){
   const resId = {
-    estimate:   'est-item-search-result',
-    order:      'order-item-search-result',
-    pos:        'pos-search-result',
-    storeB:     'storeB-search-result',
-    purchase:   'purchase-search-result',
-    production: 'prod-item-search-result',
-    gift:       'gift-item-search-result',
-    proc_in:    'proc-in-search-result',
-    proc_out:   'proc-out-search-result',
+    estimate:     'est-item-search-result',
+    order:        'order-item-search-result',
+    pos:          'pos-search-result',
+    'store-daily':'store-daily-search-result',
+    storeB:       'store-daily-search-result',
+    purchase:     'purchase-search-result',
+    production:   'prod-item-search-result',
+    gift:         'gift-item-search-result',
+    proc_in:      'proc-in-search-result',
+    proc_out:     'proc-out-search-result',
   }[context];
   const searchId = {
-    estimate:   'est-item-search',
-    order:      'order-item-search',
-    pos:        'pos-search',
-    storeB:     'storeB-search',
-    purchase:   'purchase-search',
-    production: 'prod-item-search',
-    gift:       'gift-item-search',
-    proc_in:    'proc-in-search',
-    proc_out:   'proc-out-search',
+    estimate:     'est-item-search',
+    order:        'order-item-search',
+    pos:          'pos-search',
+    'store-daily':'store-daily-search',
+    storeB:       'store-daily-search',
+    purchase:     'purchase-search',
+    production:   'prod-item-search',
+    gift:         'gift-item-search',
+    proc_in:      'proc-in-search',
+    proc_out:     'proc-out-search',
   }[context];
 
   const el = document.getElementById(resId);
@@ -238,15 +242,16 @@ function addItemTo(context, itemId){
   if(si) si.value = '';
 
   const fnMap = {
-    estimate:   'addEstimateItem',
-    order:      'addOrderItem',
-    pos:        'addPOSItem',
-    storeB:     'addStoreBItem',
-    purchase:   'addPurchaseItem',
-    production: 'addProductionItem',
-    gift:       'addGiftItem',
-    proc_in:    'addProcInputItem',
-    proc_out:   'addProcOutputItem',
+    estimate:     'addEstimateItem',
+    order:        'addOrderItem',
+    pos:          'addPOSItem',
+    'store-daily':'addStoreDailyItem',
+    storeB:       'addStoreDailyItem',
+    purchase:     'addPurchaseItem',
+    production:   'addProductionItem',
+    gift:         'addGiftItem',
+    proc_in:      'addProcInputItem',
+    proc_out:     'addProcOutputItem',
   };
   if(typeof window[fnMap[context]] === 'function') window[fnMap[context]](itemId);
 }
